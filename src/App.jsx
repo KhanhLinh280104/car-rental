@@ -1,35 +1,37 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { useState } from "react";
+
+import Home from "./pages/Home";
+import Header from "./component/Header";
+import LoginModal from "./component/LoginModal";
+import RegisterModal from "./component/RegisterModal";
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [authModal, setAuthModal] = useState(null); // "login" | "register" | null
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React hello hello xin chao nhaaa</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+    <Router>
+      <Header openLogin={() => setAuthModal("login")} />
+
+      <Routes>
+        <Route path="/" element={<Home />} />
+      </Routes>
+
+      {authModal === "login" && (
+        <LoginModal
+          close={() => setAuthModal(null)}
+          goRegister={() => setAuthModal("register")}
+        />
+      )}
+
+      {authModal === "register" && (
+        <RegisterModal
+          close={() => setAuthModal(null)}
+          goLogin={() => setAuthModal("login")}
+        />
+      )}
+    </Router>
+  );
 }
 
-export default App
+export default App;
