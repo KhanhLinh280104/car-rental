@@ -5,6 +5,9 @@ import Home from "./pages/Home";
 import Header from "./component/Header";
 import LoginModal from "./component/LoginModal";
 import RegisterModal from "./component/RegisterModal";
+import UserProfile from './pages/UserProfile';
+import ChangePasswordPage from './pages/ChangePasswordPage';
+import DeleteAccountPage from './pages/DeleteAccountPage';
 
 function App() {
   const [authModal, setAuthModal] = useState(null); // "login" | "register" | null
@@ -15,6 +18,10 @@ function App() {
 
       <Routes>
         <Route path="/" element={<Home />} />
+        <Route path="/user" element={<UserProfile />} />
+
+        <Route path="/user/change-password" element={<ChangePasswordPage />} />
+        <Route path="/user/delete-account" element={<DeleteAccountPage />} />
       </Routes>
 
       {authModal === "login" && (
@@ -30,6 +37,7 @@ function App() {
           goLogin={() => setAuthModal("login")}
         />
       )}
+
     </Router>
   );
 }
