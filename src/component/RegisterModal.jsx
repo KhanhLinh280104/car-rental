@@ -26,7 +26,7 @@ const RegisterModal = ({ close, goLogin }) => {
       />
 
       <div
-        className={`relative bg-white w-[420px] p-8 rounded-2xl shadow-2xl z-10 max-h-[90vh] overflow-y-auto transform transition-all duration-300 ${
+        className={`relative bg-white w-[420px] p-8 rounded-2xl shadow-2xl z-10 max-h-[120vh] overflow-y-auto transform transition-all duration-300 ${
           show ? "translate-y-0 opacity-100" : "-translate-y-10 opacity-0"
         }`}
       >
@@ -119,15 +119,7 @@ const RegisterModal = ({ close, goLogin }) => {
           Đăng ký
         </button>
 
-        <p className="text-sm text-center text-gray-500 mt-4">
-          Đã có tài khoản?{" "}
-          <span
-            onClick={goLogin}
-            className="text-green-600 font-semibold cursor-pointer hover:underline"
-          >
-            Đăng nhập
-          </span>
-        </p>
+        
       </div>
     </div>
   );
