@@ -1,6 +1,6 @@
 import { useState, cloneElement } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { User, Lock, Trash2, LogOut, Home, Users, FileText } from "lucide-react";
+import { User, Lock, Trash2, LogOut, Home, Users, FileText, BarChart3, Car, Settings, Map, AlertTriangle } from "lucide-react";
 import LogoutModal from "./LogoutModal";
 
 export default function Sidebar({ role = "guest", active = "", sidebarType = "role" }) {
@@ -18,7 +18,7 @@ export default function Sidebar({ role = "guest", active = "", sidebarType = "ro
       { to: "/", label: "Trang chủ", icon: <Home size={18} /> },
       { to: "/user", label: "Thông tin cá nhân", icon: <User size={18} /> },
       {to: "/user/change-password", label: "Đổi mật khẩu", icon: <User size={18} /> },
-      {to: "/user/delete-password", label: "Xóa tài khoản", icon: <Trash2 size={18} /> },
+      {to: "/user/delete-account", label: "Xóa tài khoản", icon: <Trash2 size={18} /> },
     ],
     user: [
       { id: 'home', to: "/", label: "Trang chủ", icon: <Home size={18} /> },
@@ -27,11 +27,15 @@ export default function Sidebar({ role = "guest", active = "", sidebarType = "ro
       { id: 'password', to: "/user/change-password", label: "Đổi mật khẩu", icon: <Lock size={18} /> },
       { id: 'delete', to: "/user/delete-account", label: "Yêu cầu xoá tài khoản", icon: <Trash2 size={18} /> },
     ],
-    admin: [
-      { to: "/", label: "Trang chủ", icon: <Home size={18} /> },
-      { to: "/admin", label: "Quản trị", icon: <Users size={18} /> },
-      { to: "/manage/users", label: "Người dùng", icon: <Users size={18} /> },
-      { to: "/user", label: "Hồ sơ", icon: <User size={18} /> },
+   admin: [
+      { id: 'dashboard', to: "/admin", label: "Dashboard", icon: <BarChart3 size={18} /> },
+      { id: 'fleet', to: "/admin/fleet", label: "Quản lý đội xe", icon: <Car size={18} /> },
+      { id: 'users', to: "/admin/users", label: "Quản lý người dùng", icon: <Users size={18} /> },
+      { id: 'drivers', to: "/admin/drivers", label: "Quản lý tài xế", icon: <User size={18} /> },
+      { id: 'bookings', to: "/admin/bookings", label: "Quản lý đặt xe", icon: <FileText size={18} /> },
+      { id: 'tracking', to: "/admin/tracking", label: "Bản đồ GPS", icon: <Map size={18} /> },
+      { id: 'incidents', to: "/admin/incidents", label: "Sự cố & Hư hại", icon: <AlertTriangle size={18} /> },
+      { id: 'settings', to: "/admin/settings", label: "Cấu hình hệ thống", icon: <Settings size={18} /> },
     ],
   };
 
