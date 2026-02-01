@@ -1,9 +1,9 @@
 import { useState, cloneElement } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { User, Lock, Trash2, LogOut, Home, Users, FileText } from "lucide-react";
+import { IdCard, User, Lock, Trash2, LogOut, Home, Users, FileText, Drill, Car } from "lucide-react";
 import LogoutModal from "./LogoutModal";
 
-export default function Sidebar({ role = "guest", active = "", sidebarType = "role" }) {
+export default function Sidebar({ role = "user", active = "", sidebarType = "role" }) {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
@@ -14,31 +14,30 @@ export default function Sidebar({ role = "guest", active = "", sidebarType = "ro
   };
 
   const menus = {
-    guest: [
+    user: [
       { to: "/", label: "Trang chủ", icon: <Home size={18} /> },
       { to: "/user", label: "Thông tin cá nhân", icon: <User size={18} /> },
       {to: "/user/change-password", label: "Đổi mật khẩu", icon: <User size={18} /> },
-      {to: "/user/delete-password", label: "Xóa tài khoản", icon: <Trash2 size={18} /> },
+      {to: "/user/delete-account", label: "Xóa tài khoản", icon: <Trash2 size={18} /> },
     ],
-    user: [
-      { id: 'home', to: "/", label: "Trang chủ", icon: <Home size={18} /> },
-      { id: 'bookings', to: "/bookings", label: "Đơn đặt", icon: <FileText size={18} /> },
-      { id: 'account', to: "/user", label: "Tài khoản của tôi", icon: <User size={18} /> },
-      { id: 'password', to: "/user/change-password", label: "Đổi mật khẩu", icon: <Lock size={18} /> },
-      { id: 'delete', to: "/user/delete-account", label: "Yêu cầu xoá tài khoản", icon: <Trash2 size={18} /> },
+    staff: [
+      { id: 'home', to: "/staff", label: "Trang chủ", icon: <Home size={18} /> },
+      { id: 'bookings', to: "/staff/booking", label: "Đơn đặt", icon: <FileText size={18} /> },
+      { id: 'account', to: "/staff/driver-list", label: "Danh sách tài xế", icon: <IdCard size={18} /> },
+      { id: 'account', to: "/staff/vehicle-list", label: "Danh sách xe", icon: <Car size={18} /> },
     ],
     admin: [
-      { to: "/", label: "Trang chủ", icon: <Home size={18} /> },
-      { to: "/admin", label: "Quản trị", icon: <Users size={18} /> },
-      { to: "/manage/users", label: "Người dùng", icon: <Users size={18} /> },
-      { to: "/user", label: "Hồ sơ", icon: <User size={18} /> },
+      { id: 'home', to: "/", label: "Trang chủ", icon: <Home size={18} /> },
+      { id: 'admin', to: "/admin", label: "Quản trị", icon: <Users size={18} /> },
+      { id: 'users', to: "/manage/users", label: "Người dùng", icon: <Users size={18} /> },
+      { id: 'profile', to: "/user", label: "Hồ sơ", icon: <User size={18} /> },
     ],
   };
 
-  const items = menus[role] || menus.guest;
+  const items = menus[role] || menus.user;
 
-  // derive whether to use the user-style sidebar: explicit prop, role, or path
-  const renderUserStyle = sidebarType === "user" || role === "user" || location.pathname.startsWith('/user');
+  // derive whether to use the user-style sidebar: always render user style for all roles
+  const renderStyle = true;
 
   // derive active item from prop or from pathname for user pages
   let derivedActive = active;
@@ -51,7 +50,7 @@ export default function Sidebar({ role = "guest", active = "", sidebarType = "ro
     else if (p === '/' || p === '') derivedActive = 'home';
   }
 
-  if (renderUserStyle) {
+  if (renderStyle) {
     return (
       <div className="w-full lg:w-1/4 mb-6 lg:mb-0">
         <h2 className="text-2xl font-bold mb-6 text-gray-800">Xin chào bạn!</h2>
@@ -62,7 +61,7 @@ export default function Sidebar({ role = "guest", active = "", sidebarType = "ro
                 key={item.id || item.to}
                 to={item.to}
                 className={`flex items-center space-x-3 px-6 py-4 transform transition-all duration-200 ease-in-out 
-                  ${derivedActive === item.id
+                  ${derivedActive === (item.id || item.to)
                     ? 'border-l-4 border-green-500 text-green-600 bg-green-50' 
                     : 'text-gray-600 border-l-4 border-transparent hover:border-green-500 hover:bg-green-50 hover:text-green-600'
                   }`}
@@ -101,14 +100,14 @@ export default function Sidebar({ role = "guest", active = "", sidebarType = "ro
               key={item.id || item.to}
               to={item.to}
               className={`group flex items-center space-x-3 px-4 py-3 transition-colors duration-200 transform ${
-                derivedActive === item.id
+                derivedActive === (item.id || item.to)
                   ? 'border-l-4 border-green-500 text-green-600 bg-green-50'
                   : 'text-gray-700 hover:bg-gray-50 hover:text-green-600 border-l-4 border-transparent hover:translate-x-1'
               }`}
             >
               <span className="flex-shrink-0">
                 {cloneElement(item.icon, {
-                  className: derivedActive === item.id ? 'text-green-600' : 'text-gray-400 group-hover:text-green-600',
+                  className: derivedActive === (item.id || item.to) ? 'text-green-600' : 'text-gray-400 group-hover:text-green-600',
                 })}
               </span>
               <span className="font-medium">{item.label}</span>

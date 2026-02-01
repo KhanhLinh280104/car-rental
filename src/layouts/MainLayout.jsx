@@ -3,7 +3,7 @@ import MainHeader from "../component/MainHeader";
 import Sidebar from "../component/Sidebar";
 import Footer from "../component/Footer";
 
-export default function MainLayout({ openLogin, role = "guest", setRole, sidebarType = "role" }) {
+export default function MainLayout({ openLogin, role = "user", setRole, sidebarType = "role" }) {
   return (
     <div className="min-h-screen flex flex-col">
       <MainHeader />
