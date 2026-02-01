@@ -2,26 +2,32 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { useState } from "react";
 
 import Home from "./pages/Home";
-import Header from "./component/Header";
+import User from "./pages/User";
+import ChangePasswordContent from "./component/ChangePasswordContent";
+import DeleteAccountContent from "./component/DeleteAccountContent";
+import MainLayout from "./layouts/MainLayout";
 import LoginModal from "./component/LoginModal";
 import RegisterModal from "./component/RegisterModal";
-import UserProfile from './pages/UserProfile';
-import ChangePasswordPage from './pages/ChangePasswordPage';
-import DeleteAccountPage from './pages/DeleteAccountPage';
 
 function App() {
   const [authModal, setAuthModal] = useState(null); // "login" | "register" | null
+  const [role, setRole] = useState("guest");
 
   return (
     <Router>
-      <Header openLogin={() => setAuthModal("login")} />
-
       <Routes>
+        {/* Homepage - standalone with Header, no Sidebar */}
         <Route path="/" element={<Home />} />
-        <Route path="/user" element={<UserProfile />} />
 
-        <Route path="/user/change-password" element={<ChangePasswordPage />} />
-        <Route path="/user/delete-account" element={<DeleteAccountPage />} />
+        {/* App routes - with MainLayout (Header + Sidebar + Footer) */}
+        <Route
+          path="/user"
+          element={<MainLayout openLogin={() => setAuthModal("login")} role={role} setRole={setRole} sidebarType="user" />}
+        >
+          <Route index element={<User />} />
+          <Route path="change-password" element={<ChangePasswordContent />} />
+          <Route path="delete-account" element={<DeleteAccountContent />} />
+        </Route>
       </Routes>
 
       {authModal === "login" && (

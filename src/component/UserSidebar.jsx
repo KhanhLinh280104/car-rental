@@ -1,17 +1,16 @@
-import React, { useState } from 'react';
-import { User, Car, Heart, Clock, Gift, MapPin, Lock, Trash2, LogOut } from 'lucide-react';
+import { useState } from 'react';
+import { User, Lock, Trash2, LogOut } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import LogoutModal from './LogoutModal'; // Import Modal
+import LogoutModal from './LogoutModal';
 
 const UserSidebar = ({ active = 'account' }) => {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const navigate = useNavigate();
 
-  // Hàm xử lý "Giả vờ" đăng xuất
   const handleLogout = () => {
     console.log("Đã bấm đăng xuất!");
     setShowLogoutModal(false);
-    navigate('/'); // Chuyển về trang chủ
+    navigate('/');
   };
 
   const menuItems = [
