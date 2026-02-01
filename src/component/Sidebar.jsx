@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-// 1. THÊM IdCard VÀO DÒNG IMPORT
 import { 
   User, Lock, Trash2, LogOut, Home, Users, FileText, 
-  BarChart3, Car, Settings, Map, AlertTriangle, IdCard 
+  BarChart3, Car, Settings, Map, AlertTriangle, IdCard, DollarSign, Star
 } from "lucide-react";
 import LogoutModal from "./LogoutModal";
 
@@ -22,7 +21,7 @@ export default function Sidebar({ role = "user" }) {
     user: [
       { id: 'home', to: "/", label: "Trang chủ", icon: <Home size={18} /> },
       { id: 'profile', to: "/user", label: "Thông tin cá nhân", icon: <User size={18} /> },
-      { id: 'password', to: "/user/change-password", label: "Đổi mật khẩu", icon: <Lock size={18} /> }, // Sửa icon thành Lock cho hợp
+      { id: 'password', to: "/user/change-password", label: "Đổi mật khẩu", icon: <Lock size={18} /> },
       { id: 'delete', to: "/user/delete-account", label: "Xóa tài khoản", icon: <Trash2 size={18} /> },
     ],
     staff: [
@@ -41,24 +40,27 @@ export default function Sidebar({ role = "user" }) {
       { id: 'incidents', to: "/admin/incidents", label: "Sự cố & Hư hại", icon: <AlertTriangle size={18} /> },
       { id: 'settings', to: "/admin/settings", label: "Cấu hình hệ thống", icon: <Settings size={18} /> },
     ],
+    driver: [
+      { id: 'trip', to: "/driver", label: "Chuyến đi", icon: <Car size={18} /> },
+      { id: 'dashboard', to: "/driver/dashboard", label: "Dashboard cá nhân", icon: <Star size={18} /> },
+      { id: 'report', to: "/driver/report", label: "Báo cáo", icon: <AlertTriangle size={18} /> },
+      { id: 'profile', to: "/driver/profile", label: "Thông tin cá nhân", icon: <User size={18} /> },
+      { id: 'history', to: "/driver/history", label: "Lịch sử", icon: <FileText size={18} /> },
+    ],
   };
 
-  // Chọn menu dựa trên role, mặc định là user
   const items = menus[role] || menus.user;
 
-  // 2. LOGIC TỰ ĐỘNG HIGHLIGHT (Thông minh hơn, không cần if/else dài dòng)
   const currentPath = location.pathname;
-  // Tìm item nào có đường dẫn khớp với URL hiện tại
   const activeItem = items.find(item => 
-    item.to === '/' ? currentPath === '/' : currentPath.startsWith(item.to)
+    item.to === '/' ? currentPath === '/' : currentPath === item.to || (currentPath.startsWith(item.to) && item.to !== '/driver')
   );
-  // Lấy ID của item đó để tô màu
   const derivedActive = activeItem ? activeItem.id : '';
 
   return (
     <div className="w-full lg:w-1/4 mb-6 lg:mb-0">
       <h2 className="text-2xl font-bold mb-6 text-gray-800">
-        {role === 'admin' ? 'Quản trị viên' : role === 'staff' ? 'Nhân viên' : 'Xin chào bạn!'}
+        {role === 'admin' ? 'Quản trị viên' : role === 'staff' ? 'Nhân viên' : role === 'driver' ? 'Tài xế' : 'Xin chào bạn!'}
       </h2>
       
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
