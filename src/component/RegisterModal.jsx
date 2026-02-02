@@ -1,11 +1,19 @@
 import { useEffect, useState } from "react";
 import { Eye, EyeOff, X } from "lucide-react";
+import { registerApi } from "../api/authApi";
 
 const RegisterModal = ({ close, goLogin }) => {
   const [show, setShow] = useState(false);
   const [showPass, setShowPass] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [agree, setAgree] = useState(false);
+
+  // Form State
+  const [fullName, setFullName] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   useEffect(() => {
     setShow(true);
@@ -16,19 +24,40 @@ const RegisterModal = ({ close, goLogin }) => {
     setTimeout(close, 200);
   };
 
+  const handleRegister = async () => {
+    if (password !== confirmPassword) {
+      alert("Mật khẩu xác nhận không khớp!");
+      return;
+    }
+    if (!agree) return;
+
+    try {
+      await registerApi({
+        fullName,
+        phoneNumber,
+        email,
+        password,
+      });
+      alert("Đăng ký thành công! Vui lòng đăng nhập.");
+      handleClose();
+      if (goLogin) goLogin(); // Switch to login modal
+    } catch (error) {
+      console.error("Register Error:", error);
+      alert(error.response?.data?.message || "Đăng ký thất bại: " + error.message);
+    }
+  };
+
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50">
       <div
-        className={`absolute inset-0 bg-black/50 transition-opacity duration-300 ${
-          show ? "opacity-100" : "opacity-0"
-        }`}
+        className={`absolute inset-0 bg-black/50 transition-opacity duration-300 ${show ? "opacity-100" : "opacity-0"
+          }`}
         onClick={handleClose}
       />
 
       <div
-        className={`relative bg-white w-[420px] p-8 rounded-2xl shadow-2xl z-10 max-h-[120vh] overflow-y-auto transform transition-all duration-300 ${
-          show ? "translate-y-0 opacity-100" : "-translate-y-10 opacity-0"
-        }`}
+        className={`relative bg-white w-[420px] p-8 rounded-2xl shadow-2xl z-10 max-h-[120vh] overflow-y-auto transform transition-all duration-300 ${show ? "translate-y-0 opacity-100" : "-translate-y-10 opacity-0"
+          }`}
       >
         <button
           onClick={handleClose}
@@ -39,29 +68,48 @@ const RegisterModal = ({ close, goLogin }) => {
 
         <h2 className="text-2xl font-bold text-center mb-6">Đăng ký</h2>
 
-        {[
-          { label: "Họ và tên", type: "text" },
-          { label: "Số điện thoại", type: "tel" },
-          { label: "Email", type: "email" },
-          { label: "Ngày sinh", type: "date" },
-        ].map((item, i) => (
-          <div className="mb-4" key={i}>
-            <label className="block mb-1 font-medium">{item.label}</label>
-            <input
-              placeholder="Nhập vào"
-              type={item.type}
-              className="w-full border p-2 rounded-lg focus:ring-2 focus:ring-green-500 outline-none"
-            />
-          </div>
-        ))}
+        <div className="mb-4">
+          <label className="block mb-1 font-medium">Họ và tên</label>
+          <input
+            placeholder="Nhập vào"
+            type="text"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            className="w-full border p-2 rounded-lg focus:ring-2 focus:ring-green-500 outline-none"
+          />
+        </div>
+
+        <div className="mb-4">
+          <label className="block mb-1 font-medium">Số điện thoại</label>
+          <input
+            placeholder="Nhập vào"
+            type="tel"
+            value={phoneNumber}
+            onChange={(e) => setPhoneNumber(e.target.value)}
+            className="w-full border p-2 rounded-lg focus:ring-2 focus:ring-green-500 outline-none"
+          />
+        </div>
+
+        <div className="mb-4">
+          <label className="block mb-1 font-medium">Email</label>
+          <input
+            placeholder="Nhập vào"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full border p-2 rounded-lg focus:ring-2 focus:ring-green-500 outline-none"
+          />
+        </div>
 
         {/* Password */}
         <div className="mb-4">
           <label className="block mb-1 font-medium">Mật khẩu</label>
           <div className="relative">
             <input
-            placeholder="Nhập mật khẩu"
+              placeholder="Nhập mật khẩu"
               type={showPass ? "text" : "password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               className="w-full border p-2 rounded-lg pr-10"
             />
             <button
@@ -79,8 +127,10 @@ const RegisterModal = ({ close, goLogin }) => {
           <label className="block mb-1 font-medium">Xác nhận mật khẩu</label>
           <div className="relative">
             <input
-            placeholder="Nhập mật khẩu"
+              placeholder="Nhập mật khẩu"
               type={showConfirm ? "text" : "password"}
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
               className="w-full border p-2 rounded-lg pr-10"
             />
             <button
@@ -109,17 +159,16 @@ const RegisterModal = ({ close, goLogin }) => {
         </div>
 
         <button
+          onClick={handleRegister}
           disabled={!agree}
-          className={`w-full py-2 rounded-lg font-semibold transition ${
-            agree
+          className={`w-full py-2 rounded-lg font-semibold transition ${agree
               ? "bg-green-600 text-white hover:bg-green-700"
               : "bg-gray-300 text-gray-500 cursor-not-allowed"
-          }`}
+            }`}
         >
           Đăng ký
         </button>
 
-        
       </div>
     </div>
   );
