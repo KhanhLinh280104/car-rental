@@ -48,9 +48,9 @@ export default function VehicleList() {
             onChange={(e) => setBatteryFilter(e.target.value)}
           >
             <option value="all">Tất cả</option>
-            <option value="high">Pin cao (>60%)</option>
+            <option value="high">Pin cao (&gt;60%)</option>
             <option value="medium">Pin trung bình (30–60%)</option>
-            <option value="low">Pin thấp (≤30%)</option>
+            <option value="low">Pin thấp (&le;30%)</option>
           </select>
         </div>
 

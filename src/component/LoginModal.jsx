@@ -1,9 +1,18 @@
 import { useEffect, useState } from "react";
 import { Eye, EyeOff, X } from "lucide-react";
+import { loginApi } from "../api/authApi";   // chỉnh path nếu khác
+import { jwtDecode } from "jwt-decode";
+import { useNavigate } from "react-router-dom";
 
 const LoginModal = ({ close, goRegister }) => {
   const [show, setShow] = useState(false);
   const [showPass, setShowPass] = useState(false);
+
+  // 🟢 THÊM STATE CHO EMAIL & PASSWORD
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  const navigate = useNavigate();
 
   useEffect(() => {
     setShow(true);
@@ -14,21 +23,55 @@ const LoginModal = ({ close, goRegister }) => {
     setTimeout(close, 200);
   };
 
+  // 🟢 HÀM LOGIN
+  const handleLogin = async () => {
+    // 🟢 Xóa token cũ trước khi login để tránh gửi token hết hạn/sai kèm request
+    localStorage.removeItem("token");
+    localStorage.removeItem("role");
+
+    try {
+      const res = await loginApi({ email, password });
+
+      const token = res.data.accessToken;
+      const refreshToken = res.data.refreshToken;
+      const role = res.data.role;   // lấy trực tiếp từ backen
+      localStorage.setItem("token", token);
+      localStorage.setItem("refreshToken", refreshToken);
+      localStorage.setItem("role", role);
+
+
+      // Điều hướng theo role
+      if (role === "ADMIN") navigate("/admin");
+      else if (role === "STAFF") navigate("/staff");
+      else if (role === "DRIVER") navigate("/driver");
+      else navigate("/user");
+
+      handleClose();
+
+    } catch (err) {
+      console.error("Login Error Details:", err);
+      // DEBUG: Hiển thị chi tiết lỗi để người dùng báo lại
+      if (err.response) {
+        alert(`LỖI TỪ SERVER (${err.response.status})
+URL gọi: ${err.config.url}
+Nội dung lỗi: ${JSON.stringify(err.response.data, null, 2)}`);
+      } else {
+        alert("Lỗi kết nối: " + err.message);
+      }
+    }
+  };
+
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50">
-      {/* Overlay */}
       <div
-        className={`absolute inset-0 bg-black/50 transition-opacity duration-300 ${
-          show ? "opacity-100" : "opacity-0"
-        }`}
+        className={`absolute inset-0 bg-black/50 transition-opacity duration-300 ${show ? "opacity-100" : "opacity-0"
+          }`}
         onClick={handleClose}
       />
 
-      {/* Modal */}
       <div
-        className={`relative bg-white w-96 p-8 rounded-2xl shadow-2xl z-10 transform transition-all duration-300 ${
-          show ? "translate-y-0 opacity-100" : "-translate-y-10 opacity-0"
-        }`}
+        className={`relative bg-white w-96 p-8 rounded-2xl shadow-2xl z-10 transform transition-all duration-300 ${show ? "translate-y-0 opacity-100" : "-translate-y-10 opacity-0"
+          }`}
       >
         <button
           onClick={handleClose}
@@ -42,8 +85,10 @@ const LoginModal = ({ close, goRegister }) => {
         <div className="mb-4">
           <label className="block mb-1 font-medium">Email</label>
           <input
-             placeholder="Nhập email"
+            placeholder="Nhập email"
             type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
             className="w-full border p-2 rounded-lg focus:ring-2 focus:ring-green-500 outline-none"
           />
         </div>
@@ -54,6 +99,8 @@ const LoginModal = ({ close, goRegister }) => {
             <input
               placeholder="Nhập mật khẩu"
               type={showPass ? "text" : "password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               className="w-full border p-2 rounded-lg pr-10 focus:ring-2 focus:ring-green-500 outline-none"
             />
             <button
@@ -76,7 +123,10 @@ const LoginModal = ({ close, goRegister }) => {
           </span>
         </p>
 
-        <button className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition font-semibold">
+        <button
+          onClick={handleLogin}
+          className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition font-semibold"
+        >
           Đăng nhập
         </button>
       </div>

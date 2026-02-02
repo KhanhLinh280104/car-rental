@@ -1,20 +1,45 @@
 import { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { 
-  User, Lock, Trash2, LogOut, Home, Users, FileText, 
-  BarChart3, Car, Settings, Map, AlertTriangle, IdCard, DollarSign, Star
+import {
+  User,
+  Lock,
+  Trash2,
+  LogOut,
+  Home,
+  Users,
+  FileText,
+  BarChart3,
+  Car,
+  Settings,
+  Map,
+  AlertTriangle,
+  IdCard,
+  DollarSign,
+  Star
 } from "lucide-react";
+
 import LogoutModal from "./LogoutModal";
+import { logoutApi } from "../api/authApi";
 
 export default function Sidebar({ role = "user" }) {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
-  const handleLogout = () => {
-    setShowLogoutModal(false);
-    navigate("/");
-    window.location.reload();
+  const handleLogout = async () => {
+    try {
+      const refreshToken = localStorage.getItem("refreshToken");
+      if (refreshToken) {
+        await logoutApi(refreshToken);
+      }
+    } catch (error) {
+      console.error("Logout failed:", error);
+    } finally {
+      localStorage.clear(); // Clear all tokens
+      setShowLogoutModal(false);
+      navigate("/");
+      window.location.reload();
+    }
   };
 
   const menus = {
@@ -52,8 +77,12 @@ export default function Sidebar({ role = "user" }) {
   const items = menus[role] || menus.user;
 
   const currentPath = location.pathname;
-  const activeItem = items.find(item => 
-    item.to === '/' ? currentPath === '/' : currentPath === item.to || (currentPath.startsWith(item.to) && item.to !== '/driver')
+
+
+  // Tìm item nào có đường dẫn khớp với URL hiện tại
+  const activeItem = items.find(item =>
+    item.to === '/' ? currentPath === '/' : currentPath.startsWith(item.to)
+
   );
   const derivedActive = activeItem ? activeItem.id : '';
 
@@ -62,7 +91,7 @@ export default function Sidebar({ role = "user" }) {
       <h2 className="text-2xl font-bold mb-6 text-gray-800">
         {role === 'admin' ? 'Quản trị viên' : role === 'staff' ? 'Nhân viên' : role === 'driver' ? 'Tài xế' : 'Xin chào bạn!'}
       </h2>
-      
+
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="flex flex-col">
           {items.map((item) => (
@@ -70,8 +99,8 @@ export default function Sidebar({ role = "user" }) {
               key={item.id}
               to={item.to}
               className={`flex items-center space-x-3 px-6 py-4 transition-colors w-full text-left
-                ${derivedActive === item.id 
-                  ? 'border-l-4 border-green-500 text-green-600 bg-green-50' 
+                ${derivedActive === item.id
+                  ? 'border-l-4 border-green-500 text-green-600 bg-green-50'
                   : 'text-gray-600 hover:bg-gray-50 border-l-4 border-transparent'
                 }`}
             >
@@ -79,8 +108,8 @@ export default function Sidebar({ role = "user" }) {
               <span className="font-medium">{item.label}</span>
             </Link>
           ))}
-          
-          <button 
+
+          <button
             onClick={() => setShowLogoutModal(true)}
             className="flex items-center space-x-3 px-6 py-4 text-red-500 hover:bg-red-50 mt-2 border-t border-gray-100 w-full text-left transition-colors"
           >
@@ -89,11 +118,11 @@ export default function Sidebar({ role = "user" }) {
           </button>
         </div>
       </div>
-      
-      <LogoutModal 
-        isOpen={showLogoutModal} 
-        onClose={() => setShowLogoutModal(false)} 
-        onConfirm={handleLogout} 
+
+      <LogoutModal
+        isOpen={showLogoutModal}
+        onClose={() => setShowLogoutModal(false)}
+        onConfirm={handleLogout}
       />
     </div>
   );
