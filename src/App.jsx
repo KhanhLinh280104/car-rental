@@ -23,6 +23,14 @@ import AdminDrivers from "./pages/admin/AdminDrivers";
 import AdminTracking from "./pages/admin/AdminTracking";
 import AdminIncidents from "./pages/admin/AdminIncidents";
 
+// --- IMPORT CÁC TRANG DRIVER---
+import DriverTrip from "./pages/driver/DriverTrip";
+import DriverDashboard from "./pages/driver/DriverDashboard";
+import DriverReport from "./pages/driver/DriverReport";
+import DriverProfile from "./pages/driver/DriverProfile";
+import DriverHistory from "./pages/driver/DriverHistory";
+
+
 function App() {
   const [authModal, setAuthModal] = useState(null); // "login" | "register" | null
   const [role, setRole] = useState("user");
@@ -57,6 +65,28 @@ function App() {
           <Route path="driver-list" element={<DriverList/>}/>
           <Route path="vehicle-list" element={<VehicleList/>}/>
         </Route>
+
+
+{/* --- DRIVER ROUTES --- */}
+<Route
+  path="/driver"
+  element={
+    <MainLayout
+      openLogin={() => setAuthModal("login")}
+      role="driver"
+      setRole={setRole}
+      sidebarType="driver"
+    />
+  }
+>
+  <Route index element={<DriverTrip />} />
+  <Route path="dashboard" element={<DriverDashboard />} />
+  <Route path="report" element={<DriverReport />} />
+  <Route path="profile" element={<DriverProfile />} />
+  <Route path="history" element={<DriverHistory />} />
+</Route>
+
+
         {/* --- ADMIN ROUTES --- */}
         <Route 
           path="/admin" 
