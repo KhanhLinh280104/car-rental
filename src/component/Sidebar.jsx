@@ -78,12 +78,18 @@ export default function Sidebar({ role = "user" }) {
 
   const currentPath = location.pathname;
 
-
   // Tìm item nào có đường dẫn khớp với URL hiện tại
-  const activeItem = items.find(item =>
-    item.to === '/' ? currentPath === '/' : currentPath.startsWith(item.to)
+  // Sắp xếp items theo độ dài path giảm dần để match chính xác nhất trước
+  const sortedItems = [...items].sort((a, b) => b.to.length - a.to.length);
 
-  );
+  const activeItem = sortedItems.find(item => {
+    if (item.to === '/') {
+      return currentPath === '/';
+    }
+    // Exact match hoặc match với trailing slash
+    return currentPath === item.to || currentPath.startsWith(item.to + '/');
+  });
+
   const derivedActive = activeItem ? activeItem.id : '';
 
   return (
