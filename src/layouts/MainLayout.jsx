@@ -6,7 +6,7 @@ import Footer from "../component/Footer";
 
 export default function MainLayout({ openLogin, role = "user", setRole, sidebarType = "role" }) {
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-gray-50">
       {/* SỬA QUAN TRỌNG: Phải truyền openLogin vào đây thì nút Đăng nhập mới chạy */}
       <Header openLogin={openLogin} />
 
