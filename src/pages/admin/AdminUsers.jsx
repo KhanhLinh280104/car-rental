@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Ban, CheckCircle, Plus, Edit, Trash2, X, Key, Search } from 'lucide-react';
+import { Shield, Ban, CheckCircle, Plus, Edit, Trash2, X, Key, Search, Eye, EyeOff, UserCog } from 'lucide-react';
 import {
   getAllUsersApi,
   searchUsersApi,
-  getUserByIdApi,
   createUserApi,
   updateUserApi,
   deleteUserApi,
@@ -12,6 +11,7 @@ import {
   resetUserPasswordApi
 } from '../../api/adminUserApi';
 import { getAllRolesApi } from '../../api/roleApi';
+import { useNotification } from '../../context/NotificationContext';
 
 const AdminUsers = () => {
   const [users, setUsers] = useState([]);
@@ -38,6 +38,10 @@ const AdminUsers = () => {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
 
+  // State hỗ trợ giao diện
+  const [showPass, setShowPass] = useState(false);
+  const { notifySuccess, notifyError, notifyConfirm } = useNotification();
+
   // Form data
   const [formData, setFormData] = useState({
     email: '',
@@ -46,18 +50,26 @@ const AdminUsers = () => {
     phone: '',
     gender: '',
     dob: '',
-    roleId: null, // Will be set after roles are loaded
+    roleId: null,
     isActive: true
   });
 
   const [newPassword, setNewPassword] = useState('');
 
-  // Fetch roles on component mount
+  // Hàm tạo password ngẫu nhiên
+  const generateRandomPassword = () => {
+    const chars = "ABCabc123!@#$";
+    let pass = "";
+    for (let i = 0; i < 8; i++) {
+      pass += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setNewPassword(pass);
+  };
+
   useEffect(() => {
     fetchRoles();
   }, []);
 
-  // Fetch users on component mount and when page changes
   useEffect(() => {
     fetchUsers();
   }, [page]);
@@ -67,8 +79,6 @@ const AdminUsers = () => {
       setRolesLoading(true);
       const response = await getAllRolesApi();
       setRoles(response.data || []);
-
-      // Set default roleId to CUSTOMER if available
       const customerRole = response.data?.find(r => r.name === 'CUSTOMER');
       if (customerRole && !formData.roleId) {
         setFormData(prev => ({ ...prev, roleId: customerRole.id }));
@@ -84,7 +94,6 @@ const AdminUsers = () => {
     try {
       setLoading(true);
       setError(null);
-
       let response;
       if (searchKeyword || filterActive !== '') {
         const searchParams = {
@@ -97,7 +106,6 @@ const AdminUsers = () => {
       } else {
         response = await getAllUsersApi({ page, size });
       }
-
       setUsers(response.data.content || []);
       setTotalPages(response.data.totalPages || 0);
       setTotalElements(response.data.totalElements || 0);
@@ -110,22 +118,35 @@ const AdminUsers = () => {
   };
 
   const handleSearch = () => {
-    setPage(0); // Reset to first page
+    setPage(0);
     fetchUsers();
   };
 
-  const handleToggleStatus = async (user) => {
-    try {
-      if (user.isActive) {
-        await deactivateUserApi(user.userId);
-      } else {
-        await activateUserApi(user.userId);
+  // 👇 SỬA LẠI: Thêm Modal Xác Nhận khi Khóa/Mở khóa
+  const handleToggleStatus = (user) => {
+    const actionName = user.isActive ? 'khóa' : 'mở khóa';
+    const confirmText = user.isActive 
+      ? `Bạn có chắc chắn muốn KHÓA tài khoản ${user.email}? Người dùng sẽ không thể đăng nhập.`
+      : `Bạn có muốn MỞ KHÓA cho tài khoản ${user.email}?`;
+
+    notifyConfirm(
+      `Xác nhận ${actionName}?`,
+      confirmText,
+      async () => {
+        try {
+          if (user.isActive) {
+            await deactivateUserApi(user.userId);
+          } else {
+            await activateUserApi(user.userId);
+          }
+          notifySuccess(`Đã ${actionName} tài khoản thành công!`);
+          fetchUsers();
+        } catch (err) {
+          console.error('Error toggling user status:', err);
+          notifyError(err.response?.data?.message || 'Có lỗi xảy ra');
+        }
       }
-      fetchUsers(); // Refresh list
-    } catch (err) {
-      console.error('Error toggling user status:', err);
-      alert(err.response?.data?.message || 'Không thể thay đổi trạng thái người dùng');
-    }
+    );
   };
 
   const handleCreate = async (e) => {
@@ -135,39 +156,43 @@ const AdminUsers = () => {
       setShowCreateModal(false);
       resetForm();
       fetchUsers();
-      alert('Tạo người dùng thành công!');
+      notifySuccess('Tạo người dùng mới thành công!');
     } catch (err) {
       console.error('Error creating user:', err);
-      alert(err.response?.data?.message || 'Không thể tạo người dùng');
+      notifyError(err.response?.data?.message || 'Không thể tạo người dùng');
     }
   };
 
   const handleUpdate = async (e) => {
     e.preventDefault();
     try {
-      const { password, ...updateData } = formData; // Remove password from update
+      const { password, ...updateData } = formData;
       await updateUserApi(selectedUser.userId, updateData);
       setShowEditModal(false);
       resetForm();
       fetchUsers();
-      alert('Cập nhật người dùng thành công!');
+      notifySuccess('Cập nhật thông tin thành công!');
     } catch (err) {
       console.error('Error updating user:', err);
-      alert(err.response?.data?.message || 'Không thể cập nhật người dùng');
+      notifyError(err.response?.data?.message || 'Không thể cập nhật người dùng');
     }
   };
 
-  const handleDelete = async (userId) => {
-    if (!confirm('Bạn có chắc chắn muốn xóa người dùng này?')) return;
-
-    try {
-      await deleteUserApi(userId);
-      fetchUsers();
-      alert('Xóa người dùng thành công!');
-    } catch (err) {
-      console.error('Error deleting user:', err);
-      alert(err.response?.data?.message || 'Không thể xóa người dùng');
-    }
+  const handleDelete = (userId) => {
+    notifyConfirm(
+      'Xóa người dùng?', 
+      'Bạn có chắc chắn muốn xóa vĩnh viễn người dùng này? Hành động này không thể hoàn tác.', 
+      async () => {
+        try {
+          await deleteUserApi(userId);
+          fetchUsers();
+          notifySuccess('Đã xóa người dùng thành công!');
+        } catch (err) {
+          console.error('Error deleting user:', err);
+          notifyError(err.response?.data?.message || 'Không thể xóa người dùng');
+        }
+      }
+    );
   };
 
   const handleResetPassword = async (e) => {
@@ -177,10 +202,10 @@ const AdminUsers = () => {
       setShowPasswordModal(false);
       setNewPassword('');
       setSelectedUser(null);
-      alert('Reset mật khẩu thành công!');
+      notifySuccess('Reset mật khẩu thành công!');
     } catch (err) {
       console.error('Error resetting password:', err);
-      alert(err.response?.data?.message || 'Không thể reset mật khẩu');
+      notifyError(err.response?.data?.message || 'Không thể reset mật khẩu');
     }
   };
 
@@ -215,6 +240,8 @@ const AdminUsers = () => {
       isActive: true
     });
     setSelectedUser(null);
+    setNewPassword('');
+    setShowPass(false);
   };
 
   const getRoleBadgeColor = (roleName) => {
@@ -232,7 +259,7 @@ const AdminUsers = () => {
         <h2 className="text-2xl font-bold text-gray-800">Quản lý người dùng</h2>
         <button
           onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition shadow-lg shadow-blue-100"
         >
           <Plus size={20} />
           Tạo người dùng mới
@@ -316,32 +343,20 @@ const AdminUsers = () => {
                   </td>
                   <td className="p-4 text-right">
                     <div className="flex justify-end gap-2">
-                      <button
-                        onClick={() => openEditModal(user)}
-                        className="text-blue-500 hover:text-blue-700 p-1"
-                        title="Chỉnh sửa"
-                      >
+                      <button onClick={() => openEditModal(user)} className="text-blue-500 hover:text-blue-700 p-1 rounded hover:bg-blue-50" title="Chỉnh sửa">
                         <Edit size={18} />
                       </button>
-                      <button
-                        onClick={() => openPasswordModal(user)}
-                        className="text-orange-500 hover:text-orange-700 p-1"
-                        title="Reset mật khẩu"
-                      >
+                      <button onClick={() => openPasswordModal(user)} className="text-orange-500 hover:text-orange-700 p-1 rounded hover:bg-orange-50" title="Reset mật khẩu">
                         <Key size={18} />
                       </button>
-                      <button
-                        onClick={() => handleToggleStatus(user)}
-                        className={`${user.isActive ? 'text-red-500 hover:text-red-700' : 'text-green-500 hover:text-green-700'} p-1`}
+                      <button 
+                        onClick={() => handleToggleStatus(user)} 
+                        className={`${user.isActive ? 'text-red-500 hover:text-red-700 hover:bg-red-50' : 'text-green-500 hover:text-green-700 hover:bg-green-50'} p-1 rounded`} 
                         title={user.isActive ? 'Khóa' : 'Mở khóa'}
                       >
                         {user.isActive ? <Ban size={18} /> : <CheckCircle size={18} />}
                       </button>
-                      <button
-                        onClick={() => handleDelete(user.userId)}
-                        className="text-red-500 hover:text-red-700 p-1"
-                        title="Xóa"
-                      >
+                      <button onClick={() => handleDelete(user.userId)} className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50" title="Xóa">
                         <Trash2 size={18} />
                       </button>
                     </div>
@@ -353,247 +368,198 @@ const AdminUsers = () => {
         )}
       </div>
 
-      {/* Pagination */}
+      {/* Pagination (Giữ nguyên logic cũ) */}
       {totalPages > 1 && (
         <div className="flex justify-between items-center">
-          <p className="text-sm text-gray-600">
-            Hiển thị {page * size + 1} - {Math.min((page + 1) * size, totalElements)} / {totalElements} người dùng
-          </p>
+          <p className="text-sm text-gray-600">Hiển thị {page * size + 1} - {Math.min((page + 1) * size, totalElements)} / {totalElements} người dùng</p>
           <div className="flex gap-2">
-            <button
-              onClick={() => setPage(p => Math.max(0, p - 1))}
-              disabled={page === 0}
-              className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-            >
-              Trước
-            </button>
-            <span className="px-4 py-2 bg-blue-50 text-blue-600 rounded-lg font-medium">
-              {page + 1} / {totalPages}
-            </span>
-            <button
-              onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-              disabled={page >= totalPages - 1}
-              className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-            >
-              Sau
-            </button>
+            <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 hover:bg-gray-50">Trước</button>
+            <span className="px-4 py-2 bg-blue-50 text-blue-600 rounded-lg font-medium">{page + 1} / {totalPages}</span>
+            <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 hover:bg-gray-50">Sau</button>
           </div>
         </div>
       )}
 
-      {/* Create User Modal */}
+      {/* Create User Modal (Đã thêm nút Random Password) */}
       {showCreateModal && (
         <Modal title="Tạo người dùng mới" onClose={() => { setShowCreateModal(false); resetForm(); }}>
           <form onSubmit={handleCreate} className="space-y-4">
-            <FormInput
-              label="Email *"
-              type="email"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              required
-            />
-            <FormInput
-              label="Họ tên *"
-              value={formData.fullName}
-              onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-              required
-            />
-            <FormInput
-              label="Mật khẩu *"
-              type="password"
-              value={formData.password}
-              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              required
-              minLength={6}
-            />
-            <FormInput
-              label="Số điện thoại"
-              value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-            />
+            <div className="grid grid-cols-2 gap-4">
+                <FormInput label="Email *" type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} required />
+                <FormInput label="Họ tên *" value={formData.fullName} onChange={(e) => setFormData({ ...formData, fullName: e.target.value })} required />
+            </div>
+            
+            {/* Password Field with Toggle & Random */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Mật khẩu *</label>
+              <div className="relative">
+                <input
+                  type={showPass ? "text" : "password"}
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 pr-20"
+                  required
+                  minLength={6}
+                />
+                <button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-10 top-2.5 text-gray-400 hover:text-gray-600">
+                  {showPass ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+                <button type="button" onClick={() => {
+                    const chars = "ABCabc123!@#";
+                    let pass = "";
+                    for(let i=0; i<8; i++) pass += chars.charAt(Math.floor(Math.random() * chars.length));
+                    setFormData({...formData, password: pass});
+                }} className="absolute right-2 top-2 p-1 text-blue-600 hover:bg-blue-50 rounded" title="Random">
+                  <Key size={18} />
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+                <FormInput label="Số điện thoại" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} />
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Vai trò *</label>
+                    <select value={formData.roleId || ''} onChange={(e) => setFormData({ ...formData, roleId: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required disabled={rolesLoading}>
+                        {rolesLoading ? <option>Đang tải...</option> : roles.map(role => <option key={role.id} value={role.id}>{role.name}</option>)}
+                    </select>
+                </div>
+            </div>
+            
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Giới tính</label>
-                <select
-                  value={formData.gender}
-                  onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
+                <select value={formData.gender} onChange={(e) => setFormData({ ...formData, gender: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                   <option value="">Chọn giới tính</option>
                   <option value="MALE">Nam</option>
                   <option value="FEMALE">Nữ</option>
                   <option value="OTHER">Khác</option>
                 </select>
               </div>
-              <FormInput
-                label="Ngày sinh"
-                type="date"
-                value={formData.dob}
-                onChange={(e) => setFormData({ ...formData, dob: e.target.value })}
-              />
+              <FormInput label="Ngày sinh" type="date" value={formData.dob} onChange={(e) => setFormData({ ...formData, dob: e.target.value })} />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Vai trò *</label>
-              <select
-                value={formData.roleId || ''}
-                onChange={(e) => setFormData({ ...formData, roleId: Number(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-                disabled={rolesLoading}
-              >
-                {rolesLoading ? (
-                  <option value="">Đang tải...</option>
-                ) : (
-                  roles.map(role => (
-                    <option key={role.id} value={role.id}>{role.name}</option>
-                  ))
-                )}
-              </select>
-            </div>
+
             <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="isActive"
-                checked={formData.isActive}
-                onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-                className="w-4 h-4 text-blue-600"
-              />
+              <input type="checkbox" id="isActive" checked={formData.isActive} onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })} className="w-4 h-4 text-blue-600" />
               <label htmlFor="isActive" className="text-sm text-gray-700">Kích hoạt ngay</label>
             </div>
+
             <div className="flex gap-3 pt-4">
-              <button
-                type="submit"
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-              >
-                Tạo người dùng
-              </button>
-              <button
-                type="button"
-                onClick={() => { setShowCreateModal(false); resetForm(); }}
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
-              >
-                Hủy
-              </button>
+              <button type="submit" className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">Tạo người dùng</button>
+              <button type="button" onClick={() => { setShowCreateModal(false); resetForm(); }} className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">Hủy</button>
             </div>
           </form>
         </Modal>
       )}
 
-      {/* Edit User Modal */}
+      {/* 👇 EDIT USER MODAL - GIAO DIỆN ĐẸP MỚI */}
       {showEditModal && selectedUser && (
-        <Modal title="Chỉnh sửa người dùng" onClose={() => { setShowEditModal(false); resetForm(); }}>
+        <Modal title="" onClose={() => { setShowEditModal(false); resetForm(); }}>
+          {/* Header Edit */}
+          <div className="text-center mb-6">
+            <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-blue-50">
+              <UserCog size={32} />
+            </div>
+            <h3 className="text-xl font-bold text-gray-800">Chỉnh sửa thông tin</h3>
+            <p className="text-gray-500 text-sm mt-1">Cập nhật thông tin cá nhân và quyền hạn.</p>
+          </div>
+
           <form onSubmit={handleUpdate} className="space-y-4">
-            <FormInput
-              label="Email"
-              type="email"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-            />
-            <FormInput
-              label="Họ tên"
-              value={formData.fullName}
-              onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-            />
-            <FormInput
-              label="Số điện thoại"
-              value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-            />
+            <div className="grid grid-cols-1 gap-4">
+                <FormInput label="Email (Không thể sửa)" type="email" value={formData.email} onChange={() => {}} disabled className="bg-gray-100 cursor-not-allowed text-gray-500" />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+                <FormInput label="Họ tên" value={formData.fullName} onChange={(e) => setFormData({ ...formData, fullName: e.target.value })} />
+                <FormInput label="Số điện thoại" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} />
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Giới tính</label>
-                <select
-                  value={formData.gender}
-                  onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
+                <select value={formData.gender} onChange={(e) => setFormData({ ...formData, gender: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                   <option value="">Chọn giới tính</option>
                   <option value="MALE">Nam</option>
                   <option value="FEMALE">Nữ</option>
                   <option value="OTHER">Khác</option>
                 </select>
               </div>
-              <FormInput
-                label="Ngày sinh"
-                type="date"
-                value={formData.dob}
-                onChange={(e) => setFormData({ ...formData, dob: e.target.value })}
-              />
+              <FormInput label="Ngày sinh" type="date" value={formData.dob} onChange={(e) => setFormData({ ...formData, dob: e.target.value })} />
             </div>
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Vai trò</label>
-              <select
-                value={formData.roleId || ''}
-                onChange={(e) => setFormData({ ...formData, roleId: Number(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                disabled={rolesLoading}
-              >
-                {rolesLoading ? (
-                  <option value="">Đang tải...</option>
-                ) : (
-                  roles.map(role => (
-                    <option key={role.id} value={role.id}>{role.name}</option>
-                  ))
-                )}
+              <select value={formData.roleId || ''} onChange={(e) => setFormData({ ...formData, roleId: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" disabled={rolesLoading}>
+                {rolesLoading ? <option>Đang tải...</option> : roles.map(role => <option key={role.id} value={role.id}>{role.name}</option>)}
               </select>
             </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="isActiveEdit"
-                checked={formData.isActive}
-                onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-                className="w-4 h-4 text-blue-600"
-              />
-              <label htmlFor="isActiveEdit" className="text-sm text-gray-700">Tài khoản hoạt động</label>
+
+            <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg border border-gray-100">
+              <input type="checkbox" id="isActiveEdit" checked={formData.isActive} onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })} className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500" />
+              <label htmlFor="isActiveEdit" className="text-sm font-medium text-gray-700 select-none cursor-pointer">Tài khoản đang hoạt động</label>
             </div>
+
             <div className="flex gap-3 pt-4">
-              <button
-                type="submit"
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-              >
-                Cập nhật
+              <button type="submit" className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-bold rounded-xl hover:from-blue-600 hover:to-indigo-700 transition shadow-lg shadow-blue-200 transform active:scale-95">
+                Lưu thay đổi
               </button>
-              <button
-                type="button"
-                onClick={() => { setShowEditModal(false); resetForm(); }}
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
-              >
-                Hủy
+              <button type="button" onClick={() => { setShowEditModal(false); resetForm(); }} className="px-6 py-3 bg-white border border-gray-200 text-gray-600 font-bold rounded-xl hover:bg-gray-50 transition">
+                Hủy bỏ
               </button>
             </div>
           </form>
         </Modal>
       )}
 
-      {/* Reset Password Modal */}
+      {/* 👇 RESET PASSWORD MODAL (ĐẸP) */}
       {showPasswordModal && selectedUser && (
-        <Modal title="Reset mật khẩu" onClose={() => { setShowPasswordModal(false); setNewPassword(''); setSelectedUser(null); }}>
-          <form onSubmit={handleResetPassword} className="space-y-4">
-            <p className="text-gray-600">
-              Reset mật khẩu cho: <strong>{selectedUser.fullName}</strong> ({selectedUser.email})
-            </p>
-            <FormInput
-              label="Mật khẩu mới *"
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              required
-              minLength={6}
-            />
-            <div className="flex gap-3 pt-4">
-              <button
-                type="submit"
-                className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition"
-              >
-                Reset mật khẩu
+        <Modal title="" onClose={() => { setShowPasswordModal(false); setNewPassword(''); setSelectedUser(null); }}>
+          <div className="text-center mb-6">
+            <div className="w-16 h-16 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-orange-50">
+              <Key size={32} />
+            </div>
+            <h3 className="text-xl font-bold text-gray-800">Đặt lại mật khẩu</h3>
+            <p className="text-gray-500 text-sm mt-1">Hành động này sẽ thay đổi mật khẩu đăng nhập của người dùng.</p>
+          </div>
+
+          <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 mb-6 flex items-center gap-4">
+            <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-lg shadow-md">
+              {selectedUser.fullName.charAt(0).toUpperCase()}
+            </div>
+            <div className="text-left overflow-hidden">
+              <h4 className="font-bold text-gray-800 truncate">{selectedUser.fullName}</h4>
+              <p className="text-sm text-gray-500 truncate">{selectedUser.email}</p>
+            </div>
+          </div>
+
+          <form onSubmit={handleResetPassword} className="space-y-6">
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">Mật khẩu mới</label>
+              <div className="relative group">
+                <input
+                  type={showPass ? "text" : "password"}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 pr-24 font-medium text-gray-700 transition-all group-hover:border-orange-300"
+                  placeholder="Nhập mật khẩu mới..."
+                  required
+                  minLength={6}
+                />
+                <button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-12 top-3 text-gray-400 hover:text-gray-600 p-1" title="Xem mật khẩu">
+                  {showPass ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+                <button type="button" onClick={generateRandomPassword} className="absolute right-2 top-2 p-1.5 bg-gray-100 text-orange-600 rounded-lg hover:bg-orange-100 hover:scale-105 transition-all shadow-sm" title="Tạo ngẫu nhiên">
+                  <Key size={18} />
+                </button>
+              </div>
+              <p className="text-xs text-gray-400 mt-2 pl-1 italic">* Mật khẩu tự động cập nhật ngay sau khi bấm xác nhận.</p>
+            </div>
+
+            <div className="flex gap-3">
+              <button type="submit" className="flex-1 px-4 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold rounded-xl hover:from-orange-600 hover:to-red-600 transition shadow-lg shadow-orange-200 transform active:scale-95">
+                Xác nhận đổi
               </button>
-              <button
-                type="button"
-                onClick={() => { setShowPasswordModal(false); setNewPassword(''); setSelectedUser(null); }}
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
-              >
-                Hủy
+              <button type="button" onClick={() => { setShowPasswordModal(false); setNewPassword(''); setSelectedUser(null); }} className="px-6 py-3 bg-white border border-gray-200 text-gray-600 font-bold rounded-xl hover:bg-gray-50 transition">
+                Hủy bỏ
               </button>
             </div>
           </form>
@@ -603,38 +569,23 @@ const AdminUsers = () => {
   );
 };
 
-// Reusable Modal Component
+// Reusable Components
 const Modal = ({ title, children, onClose }) => (
   <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
     <div className="bg-white rounded-xl shadow-xl max-w-md w-full animate-in zoom-in-95 duration-200">
       <div className="flex justify-between items-center p-6 border-b border-gray-100">
         <h3 className="text-xl font-bold text-gray-800">{title}</h3>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-          <X size={24} />
-        </button>
+        <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={24} /></button>
       </div>
-      <div className="p-6">
-        {children}
-      </div>
+      <div className="p-6">{children}</div>
     </div>
   </div>
 );
 
-// Reusable Form Input Component
-const FormInput = ({ label, type = 'text', value, onChange, required = false, minLength, ...props }) => (
+const FormInput = ({ label, type = 'text', value, onChange, required = false, minLength, disabled, className, ...props }) => (
   <div>
-    <label className="block text-sm font-medium text-gray-700 mb-1">
-      {label}
-    </label>
-    <input
-      type={type}
-      value={value}
-      onChange={onChange}
-      required={required}
-      minLength={minLength}
-      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-      {...props}
-    />
+    <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+    <input type={type} value={value} onChange={onChange} required={required} minLength={minLength} disabled={disabled} className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${className}`} {...props} />
   </div>
 );
 

@@ -1,18 +1,20 @@
 import { useEffect, useState } from "react";
-import { Eye, EyeOff, X } from "lucide-react";
-import { loginApi } from "../api/authApi";   // chỉnh path nếu khác
-import { jwtDecode } from "jwt-decode";
+import { Eye, EyeOff, X, CheckCircle } from "lucide-react";
+import { loginApi } from "../api/authApi";
 import { useNavigate } from "react-router-dom";
+// 👇 1. Import Hook thông báo
+import { useNotification } from "../context/NotificationContext";
 
-const LoginModal = ({ close, goRegister }) => {
+const LoginModal = ({ close, goRegister, successMessage }) => {
   const [show, setShow] = useState(false);
   const [showPass, setShowPass] = useState(false);
-
-  // 🟢 THÊM STATE CHO EMAIL & PASSWORD
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   const navigate = useNavigate();
+
+  // 👇 2. Lấy hàm notifyError từ Context
+  const { notifyError } = useNotification();
 
   useEffect(() => {
     setShow(true);
@@ -23,9 +25,13 @@ const LoginModal = ({ close, goRegister }) => {
     setTimeout(close, 200);
   };
 
-  // 🟢 HÀM LOGIN
   const handleLogin = async () => {
-    // 🟢 Xóa token cũ trước khi login để tránh gửi token hết hạn/sai kèm request
+    // Validate cơ bản
+    if (!email || !password) {
+      notifyError("Vui lòng nhập đầy đủ Email và Mật khẩu!");
+      return;
+    }
+
     localStorage.removeItem("token");
     localStorage.removeItem("role");
 
@@ -34,44 +40,35 @@ const LoginModal = ({ close, goRegister }) => {
 
       const token = res.data.accessToken;
       const refreshToken = res.data.refreshToken;
-      const role = res.data.role;   // lấy trực tiếp từ backen
+      const role = res.data.role;
+      
       localStorage.setItem("token", token);
       localStorage.setItem("refreshToken", refreshToken);
       localStorage.setItem("role", role);
 
+      handleClose();
 
-      // Điều hướng theo role
       if (role === "ADMIN") navigate("/admin");
       else if (role === "STAFF") navigate("/staff");
       else if (role === "DRIVER") navigate("/driver");
       else navigate("/user");
 
-      handleClose();
-
     } catch (err) {
-      console.error("Login Error Details:", err);
-      // DEBUG: Hiển thị chi tiết lỗi để người dùng báo lại
-      if (err.response) {
-        alert(`LỖI TỪ SERVER (${err.response.status})
-URL gọi: ${err.config.url}
-Nội dung lỗi: ${JSON.stringify(err.response.data, null, 2)}`);
-      } else {
-        alert("Lỗi kết nối: " + err.message);
-      }
+      console.error("Login Error:", err);
+      
+      notifyError("Bạn đã nhập sai mật khẩu hoặc sai email đăng nhập, vui lòng thử lại");
     }
   };
 
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50">
       <div
-        className={`absolute inset-0 bg-black/50 transition-opacity duration-300 ${show ? "opacity-100" : "opacity-0"
-          }`}
+        className={`absolute inset-0 bg-black/50 transition-opacity duration-300 ${show ? "opacity-100" : "opacity-0"}`}
         onClick={handleClose}
       />
 
       <div
-        className={`relative bg-white w-96 p-8 rounded-2xl shadow-2xl z-10 transform transition-all duration-300 ${show ? "translate-y-0 opacity-100" : "-translate-y-10 opacity-0"
-          }`}
+        className={`relative bg-white w-96 p-8 rounded-2xl shadow-2xl z-10 transform transition-all duration-300 ${show ? "translate-y-0 opacity-100" : "-translate-y-10 opacity-0"}`}
       >
         <button
           onClick={handleClose}
@@ -81,6 +78,14 @@ Nội dung lỗi: ${JSON.stringify(err.response.data, null, 2)}`);
         </button>
 
         <h2 className="text-2xl font-bold text-center mb-6">Đăng nhập</h2>
+        
+        {/* Nếu có tin nhắn thành công từ trang Register chuyển sang thì hiện ở đây */}
+        {successMessage && (
+          <div className="mb-6 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2 text-green-700 animate-pulse">
+            <CheckCircle size={20} />
+            <span className="text-sm font-medium">{successMessage}</span>
+          </div>
+        )}
 
         <div className="mb-4">
           <label className="block mb-1 font-medium">Email</label>

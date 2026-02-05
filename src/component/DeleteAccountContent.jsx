@@ -1,7 +1,15 @@
 import React from 'react';
 import { AlertTriangle } from 'lucide-react';
+import { useNotification } from "../context/NotificationContext"; // 1. Import
 
 const DeleteAccountContent = () => {
+  const { notifySuccess } = useNotification(); // 2. Lấy hàm
+
+  const handleDelete = () => {
+      // Giả lập gọi API
+      notifySuccess("Yêu cầu xóa tài khoản đã được gửi. Chúng tôi sẽ liên hệ lại sau 24h.");
+  };
+
   return (
     <div className="w-full lg:w-3/4 lg:pl-8">
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
@@ -17,7 +25,7 @@ const DeleteAccountContent = () => {
             </div>
         </div>
 
-        <form className="max-w-md space-y-4" onSubmit={(e) => e.preventDefault()}>
+        <form className="max-w-md space-y-4" onSubmit={(e) => { e.preventDefault(); handleDelete(); }}>
              <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1">Lý do xóa tài khoản</label>
                 <select className="w-full border border-gray-300 rounded-lg px-4 py-2 outline-none bg-white text-gray-700 focus:ring-2 focus:ring-red-200 transition">
@@ -29,12 +37,12 @@ const DeleteAccountContent = () => {
              </div>
 
              <div className="flex items-start gap-2 pt-2">
-                 <input type="checkbox" id="confirm" className="mt-1 w-4 h-4 text-red-600 focus:ring-red-500 border-gray-300 rounded cursor-pointer" />
+                 <input type="checkbox" id="confirm" className="mt-1 w-4 h-4 text-red-600 focus:ring-red-500 border-gray-300 rounded cursor-pointer" required />
                  <label htmlFor="confirm" className="text-sm text-gray-600 cursor-pointer select-none">Tôi cam kết chịu trách nhiệm về yêu cầu này và hiểu rằng hành động này không thể hoàn tác.</label>
              </div>
 
              <div className="pt-4">
-                <button className="w-full bg-gray-100 text-gray-400 font-bold px-6 py-3 rounded-lg hover:bg-red-600 hover:text-white transition duration-300">
+                <button type="submit" className="w-full bg-gray-100 text-gray-400 font-bold px-6 py-3 rounded-lg hover:bg-red-600 hover:text-white transition duration-300">
                   Gửi yêu cầu xóa
                 </button>
              </div>
