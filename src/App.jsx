@@ -9,9 +9,12 @@ import DeleteAccountContent from "./component/DeleteAccountContent";
 import MainLayout from "./layouts/MainLayout";
 import LoginModal from "./component/LoginModal";
 import RegisterModal from "./component/RegisterModal";
+// --- IMPORT CÁC TRANG STAFF ---
 import Booking from "./component/staff/Booking";
 import DriverList from "./component/staff/DriverList";
 import VehicleList from "./component/staff/VehicleList";
+import HandoverCar from "./component/staff/HandoverCar";
+import ReturnCarAI from "./component/staff/ReturnCarAI";
 
 // --- IMPORT CÁC TRANG ADMIN ---
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -64,6 +67,8 @@ function App() {
           <Route path="booking" element={<Booking />} />
           <Route path="driver-list" element={<DriverList/>}/>
           <Route path="vehicle-list" element={<VehicleList/>}/>
+          <Route path="handover" element={<HandoverCar />} />
+          <Route path="return-ai" element={<ReturnCarAI />} />
         </Route>
 
 

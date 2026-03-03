@@ -75,22 +75,31 @@ export default function Sidebar({ role = "user" }) {
   };
 
   const items = menus[role] || menus.user;
-
   const currentPath = location.pathname;
 
   // Tìm item nào có đường dẫn khớp với URL hiện tại
-  // Sắp xếp items theo độ dài path giảm dần để match chính xác nhất trước
   const sortedItems = [...items].sort((a, b) => b.to.length - a.to.length);
 
   const activeItem = sortedItems.find(item => {
     if (item.to === '/') {
       return currentPath === '/';
     }
-    // Exact match hoặc match với trailing slash
     return currentPath === item.to || currentPath.startsWith(item.to + '/');
   });
 
-  const derivedActive = activeItem ? activeItem.id : '';
+  // 👇 SỬA Ở ĐÂY: Xử lý highlight linh hoạt
+  let derivedActive = activeItem ? activeItem.id : '';
+
+  if (role === 'staff') {
+    // Ép sáng nút Đơn đặt nếu đang ở trang Giao/Nhận xe
+    if (currentPath.includes('/staff/handover') || currentPath.includes('/staff/return-ai')) {
+      derivedActive = 'bookings'; 
+    }
+    // Ép sáng nút Trang chủ nếu đang ở đúng gốc /staff
+    if (currentPath === '/staff' || currentPath === '/staff/') {
+      derivedActive = 'home';
+    }
+  }
 
   return (
     <div className="w-full lg:w-1/4 mb-6 lg:mb-0">

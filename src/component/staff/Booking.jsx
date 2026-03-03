@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Calendar,
   CheckCircle,
@@ -10,6 +11,7 @@ import {
 } from "lucide-react";
 
 export default function Booking() {
+  const navigate = useNavigate();
   const [bookings, setBookings] = useState([]);
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState("all");
@@ -189,20 +191,23 @@ export default function Booking() {
             </div>
 
             <div className="flex justify-end gap-2 mt-4">
+              {/* NÚT: Giao xe (Hiển thị khi status là confirmed) */}
               {b.status === "confirmed" && (
                 <button
-                  onClick={() => checkIn(b.id)}
-                  className="bg-green-600 text-white px-4 py-2 rounded-lg"
+                  onClick={() => navigate('/staff/handover')}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
                 >
-                  Check-in
+                  Check-In
                 </button>
               )}
+              
+              {/* NÚT: Nhận xe bằng AI (Hiển thị khi status là checked_in) */}
               {b.status === "checked_in" && (
                 <button
-                  onClick={() => setDamageModal(b)}
-                  className="bg-red-600 text-white px-4 py-2 rounded-lg"
+                  onClick={() => navigate('/staff/return-ai')}
+                  className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition shadow-sm"
                 >
-                  Check-out
+                  Check-Out
                 </button>
               )}
             </div>
