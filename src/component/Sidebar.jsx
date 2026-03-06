@@ -16,7 +16,8 @@ import {
   IdCard,
   DollarSign,
   Star,
-  Book
+  Book,
+  ClipboardCheck
 } from "lucide-react";
 
 import LogoutModal from "./LogoutModal";
@@ -54,6 +55,7 @@ export default function Sidebar({ role = "user" }) {
     staff: [
       { id: 'home', to: "/staff", label: "Trang chủ", icon: <Home size={18} /> },
       { id: 'bookings', to: "/staff/booking", label: "Đơn đặt", icon: <FileText size={18} /> },
+      { id: 'receive', to: "/staff/receive-car", label: "Nhận và kiểm tra xe", icon: <ClipboardCheck size={18} /> },
       { id: 'drivers', to: "/staff/driver-list", label: "Danh sách tài xế", icon: <IdCard size={18} /> },
       { id: 'vehicles', to: "/staff/vehicle-list", label: "Danh sách xe", icon: <Car size={18} /> },
     ],
@@ -93,9 +95,13 @@ export default function Sidebar({ role = "user" }) {
   let derivedActive = activeItem ? activeItem.id : '';
 
   if (role === 'staff') {
-    // Ép sáng nút Đơn đặt nếu đang ở trang Giao/Nhận xe
-    if (currentPath.includes('/staff/handover') || currentPath.includes('/staff/return-ai')) {
+    // Ép sáng nút Đơn đặt nếu đang ở trang giao xe (check-in)
+    if (currentPath.includes('/staff/handover')) {
       derivedActive = 'bookings'; 
+    }
+    // Ép sáng nút Nhận và kiểm tra xe nếu đang ở trang chi tiết nhận xe
+    if (currentPath.includes('/staff/receive-car')) {
+      derivedActive = 'receive'; 
     }
     // Ép sáng nút Trang chủ nếu đang ở đúng gốc /staff
     if (currentPath === '/staff' || currentPath === '/staff/') {

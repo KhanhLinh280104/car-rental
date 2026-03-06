@@ -18,7 +18,10 @@ import Booking from "./component/staff/Booking";
 import DriverList from "./component/staff/DriverList";
 import VehicleList from "./component/staff/VehicleList";
 import HandoverCar from "./component/staff/HandoverCar";
+import HandoverList from "./component/staff/HandoverList";
 import ReturnCarAI from "./component/staff/ReturnCarAI";
+import ReceiveCarList from "./component/staff/ReceiveCarList";
+import ReceiveCar from "./component/staff/ReceiveCar";
 
 // --- IMPORT CÁC TRANG ADMIN ---
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -72,6 +75,9 @@ function App() {
           <Route path="booking" element={<Booking />} />
           <Route path="driver-list" element={<DriverList/>}/>
           <Route path="vehicle-list" element={<VehicleList/>}/>
+          <Route path="handover/:bookingId" element={<HandoverCar />} />
+          <Route path="receive-car" element={<ReceiveCarList />} />
+          <Route path="receive-car/:bookingId" element={<ReceiveCar />} />
         </Route>
 
 
