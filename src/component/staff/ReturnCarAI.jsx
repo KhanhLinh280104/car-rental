@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
 import { Camera, Sparkles, CheckCircle, AlertTriangle, ArrowLeft, Image as ImageIcon } from 'lucide-react';
 import { useNotification } from '../../context/NotificationContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
+import { getBookingById } from './mockBookings';
 
 const ReturnCarAI = () => {
   const { notifySuccess, notifyError } = useNotification();
   const navigate = useNavigate();
+  const { bookingId } = useParams();
+  const booking = getBookingById(bookingId);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiResult, setAiResult] = useState(null);
   const [uploadedImage, setUploadedImage] = useState(false);
@@ -39,7 +42,7 @@ const ReturnCarAI = () => {
 
   const handleComplete = () => {
     notifySuccess("Đã hoàn tất thủ tục thu hồi xe!", () => {
-      navigate('/staff/booking');
+      navigate(`/staff/payment/${bookingId}`);
     });
   };
 
@@ -50,13 +53,32 @@ const ReturnCarAI = () => {
           <button onClick={() => navigate('/staff/booking')} className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-gray-600 transition">
             <ArrowLeft size={20} />
           </button>
-          <h2 className="text-2xl font-bold text-gray-800">Kiểm tra xe Trả (AI Scan)</h2>
+          <div>
+            <h2 className="text-2xl font-bold text-gray-800">Kiểm tra xe Trả (AI Scan)</h2>
+            {booking && (
+              <p className="text-sm text-gray-500 mt-0.5">
+                Đơn #{booking.id} • {booking.vehicle.name} • {booking.vehicle.plate}
+              </p>
+            )}
+          </div>
         </div>
         <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-sm font-bold flex items-center gap-1">
           <Sparkles size={16} /> Powered by AI
         </span>
       </div>
 
+      {!booking ? (
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+          <p className="text-gray-700 font-semibold">Không tìm thấy đơn đặt.</p>
+          <p className="text-gray-500 text-sm mt-1">Vui lòng quay lại danh sách Đơn đặt và chọn lại.</p>
+          <div className="mt-4">
+            <button onClick={() => navigate('/staff/booking')} className="px-4 py-2 rounded-lg bg-gray-900 text-white hover:bg-black transition">
+              Về Đơn đặt
+            </button>
+          </div>
+        </div>
+      ) : (
+      <>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col h-full">
           <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
@@ -166,6 +188,8 @@ const ReturnCarAI = () => {
         .animate-fade-in { animation: fadeIn 0.5s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
       `}} />
+      </>
+      )}
     </div>
   );
 };

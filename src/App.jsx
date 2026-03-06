@@ -4,6 +4,10 @@ import { useState } from "react";
 import Home from "./pages/Home";
 import User from "./pages/User";
 import Staff from "./pages/Staff";
+import UserBookings from "./pages/user/UserBookings";
+import UserCheckIn from "./pages/user/UserCheckIn";
+import UserCheckOut from "./pages/user/UserCheckOut";
+import UserPayment from "./pages/user/UserPayment";
 import ChangePasswordContent from "./component/ChangePasswordContent";
 import DeleteAccountContent from "./component/DeleteAccountContent";
 import MainLayout from "./layouts/MainLayout";
@@ -15,6 +19,7 @@ import DriverList from "./component/staff/DriverList";
 import VehicleList from "./component/staff/VehicleList";
 import HandoverCar from "./component/staff/HandoverCar";
 import ReturnCarAI from "./component/staff/ReturnCarAI";
+import Payment from "./component/staff/Payment";
 
 // --- IMPORT CÁC TRANG ADMIN ---
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -51,6 +56,10 @@ function App() {
 
         >
           <Route index element={<User />} />
+          <Route path="bookings" element={<UserBookings />} />
+          <Route path="checkin/:bookingId" element={<UserCheckIn />} />
+          <Route path="checkout/:bookingId" element={<UserCheckOut />} />
+          <Route path="payment/:bookingId" element={<UserPayment />} />
           <Route path="change-password" element={<ChangePasswordContent />} />
           <Route path="delete-account" element={<DeleteAccountContent />} />
         </Route>
@@ -67,8 +76,10 @@ function App() {
           <Route path="booking" element={<Booking />} />
           <Route path="driver-list" element={<DriverList/>}/>
           <Route path="vehicle-list" element={<VehicleList/>}/>
-          <Route path="handover" element={<HandoverCar />} />
-          <Route path="return-ai" element={<ReturnCarAI />} />
+          <Route path="handover/:bookingId" element={<HandoverCar />} />
+          <Route path="return-ai/:bookingId" element={<ReturnCarAI />} />
+          <Route path="payment" element={<Payment />} />
+          <Route path="payment/:bookingId" element={<Payment />} />
         </Route>
 
 

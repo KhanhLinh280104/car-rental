@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Calendar,
@@ -9,41 +9,17 @@ import {
   Upload,
   X,
 } from "lucide-react";
+import { mockBookings } from "./mockBookings";
 
 export default function Booking() {
   const navigate = useNavigate();
-  const [bookings, setBookings] = useState([]);
+  const [bookings, setBookings] = useState(mockBookings);
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState("all");
   const [checkinFilter, setCheckinFilter] = useState("all");
   const [damageModal, setDamageModal] = useState(null);
   const [damageNote, setDamageNote] = useState("");
   const [damageImages, setDamageImages] = useState([]);
-
-  useEffect(() => {
-    setBookings([
-      {
-        id: "1",
-        vehicle: { name: "Toyota Camry", plate: "ABC-123" },
-        customer: { name: "Nguyễn Văn A", phone: "0912345678" },
-        driver: null,
-        start: "2024-02-01",
-        end: "2024-02-05",
-        total: 3500000,
-        status: "confirmed",
-      },
-      {
-        id: "2",
-        vehicle: { name: "Honda Civic", plate: "XYZ-789" },
-        customer: { name: "Trần Thị B", phone: "0987654321" },
-        driver: { name: "Tài xế Minh", phone: "0909999999" },
-        start: "2024-01-28",
-        end: "2024-02-02",
-        total: 2800000,
-        status: "checked_in",
-      },
-    ]);
-  }, []);
 
   const filtered = bookings.filter((b) => {
     const text = `${b.vehicle.name} ${b.customer.name} ${b.driver?.name || ""}`.toLowerCase();
@@ -62,14 +38,18 @@ export default function Booking() {
     return matchSearch && matchTab && matchCheckin;
   });
 
-  const checkIn = (id) =>
+  const checkOut = (id, note, images) => {
     setBookings((b) =>
-      b.map((x) => (x.id === id ? { ...x, status: "checked_in" } : x))
-    );
-
-  const checkOut = (id) => {
-    setBookings((b) =>
-      b.map((x) => (x.id === id ? { ...x, status: "completed" } : x))
+      b.map((x) =>
+        x.id === id
+          ? {
+              ...x,
+              status: "completed",
+              returnNote: note || "",
+              returnImagesCount: Array.isArray(images) ? images.length : 0,
+            }
+          : x
+      )
     );
     setDamageModal(null);
     setDamageImages([]);
@@ -194,7 +174,7 @@ export default function Booking() {
               {/* NÚT: Giao xe (Hiển thị khi status là confirmed) */}
               {b.status === "confirmed" && (
                 <button
-                  onClick={() => navigate('/staff/handover')}
+                  onClick={() => navigate(`/staff/handover/${b.id}`)}
                   className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
                 >
                   Check-In
@@ -204,7 +184,7 @@ export default function Booking() {
               {/* NÚT: Nhận xe bằng AI (Hiển thị khi status là checked_in) */}
               {b.status === "checked_in" && (
                 <button
-                  onClick={() => navigate('/staff/return-ai')}
+                  onClick={() => navigate(`/staff/return-ai/${b.id}`)}
                   className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition shadow-sm"
                 >
                   Check-Out
@@ -263,7 +243,7 @@ export default function Booking() {
             </div>
 
             <button
-              onClick={() => checkOut(damageModal.id)}
+              onClick={() => checkOut(damageModal.id, damageNote, damageImages)}
               className="w-full bg-red-600 text-white py-2 rounded-xl"
             >
               Xác nhận Check-out

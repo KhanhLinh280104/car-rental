@@ -46,6 +46,7 @@ export default function Sidebar({ role = "user" }) {
     user: [
       { id: 'home', to: "/", label: "Trang chủ", icon: <Home size={18} /> },
       { id: 'profile', to: "/user", label: "Thông tin cá nhân", icon: <User size={18} /> },
+      { id: 'my_bookings', to: "/user/bookings", label: "Đơn thuê của tôi", icon: <FileText size={18} /> },
       { id: 'password', to: "/user/change-password", label: "Đổi mật khẩu", icon: <Lock size={18} /> },
       { id: 'delete', to: "/user/delete-account", label: "Xóa tài khoản", icon: <Trash2 size={18} /> },
     ],
@@ -54,6 +55,7 @@ export default function Sidebar({ role = "user" }) {
       { id: 'bookings', to: "/staff/booking", label: "Đơn đặt", icon: <FileText size={18} /> },
       { id: 'drivers', to: "/staff/driver-list", label: "Danh sách tài xế", icon: <IdCard size={18} /> },
       { id: 'vehicles', to: "/staff/vehicle-list", label: "Danh sách xe", icon: <Car size={18} /> },
+      { id: 'payment', to: "/staff/payment", label: "Thanh toán", icon: <DollarSign size={18} /> },
     ],
     admin: [
       { id: 'dashboard', to: "/admin", label: "Dashboard", icon: <BarChart3 size={18} /> },
@@ -95,9 +97,20 @@ export default function Sidebar({ role = "user" }) {
     if (currentPath.includes('/staff/handover') || currentPath.includes('/staff/return-ai')) {
       derivedActive = 'bookings'; 
     }
+    // Ép sáng nút Thanh toán nếu đang ở trang thanh toán
+    if (currentPath.includes('/staff/payment')) {
+      derivedActive = 'payment';
+    }
     // Ép sáng nút Trang chủ nếu đang ở đúng gốc /staff
     if (currentPath === '/staff' || currentPath === '/staff/') {
       derivedActive = 'home';
+    }
+  }
+
+  if (role === 'user') {
+    // Highlight mục "Đơn thuê" khi đang ở check-in/check-out/thanh toán của user
+    if (currentPath.includes('/user/checkin') || currentPath.includes('/user/checkout') || currentPath.includes('/user/payment')) {
+      derivedActive = 'my_bookings';
     }
   }
 
