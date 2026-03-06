@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
-import { useNotification } from "../context/NotificationContext"; // 1. Import
+import { useNotification } from "../../context/NotificationContext"; // 1. Import
 
 const ChangePasswordContent = () => {
   const [formData, setFormData] = useState({
@@ -80,7 +80,8 @@ const ChangePasswordContent = () => {
 
   // --- PHẦN GIAO DIỆN GIỮ NGUYÊN ---
   return (
-    <div className="max-w-md mx-auto bg-white p-8 rounded-lg shadow-sm border border-gray-100">
+    
+    <div className="max-w-md mx-auto bg-white p-8 rounded-lg shadow-sm border border-gray-100 ">
       <h3 className="text-xl font-bold mb-6 text-gray-800">Đổi mật khẩu</h3>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>

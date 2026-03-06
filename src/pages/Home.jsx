@@ -21,7 +21,6 @@ const Home = () => {
       
       <div className="home">
         <Hero />
-        <SearchTab />
         <CarBrand />
         <WhyChooseUs />
         <RentalProcess />
