@@ -15,7 +15,8 @@ import {
   AlertTriangle,
   IdCard,
   DollarSign,
-  Star
+  Star,
+  Book
 } from "lucide-react";
 
 import LogoutModal from "./LogoutModal";
@@ -46,6 +47,7 @@ export default function Sidebar({ role = "user" }) {
     user: [
       { id: 'home', to: "/", label: "Trang chủ", icon: <Home size={18} /> },
       { id: 'profile', to: "/user", label: "Thông tin cá nhân", icon: <User size={18} /> },
+      { id: 'booking', to: "/user/booking", label: "Đặt xe", icon: <Book size={18} /> },
       { id: 'password', to: "/user/change-password", label: "Đổi mật khẩu", icon: <Lock size={18} /> },
       { id: 'delete', to: "/user/delete-account", label: "Xóa tài khoản", icon: <Trash2 size={18} /> },
     ],

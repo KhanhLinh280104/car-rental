@@ -2,13 +2,17 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { useState } from "react";
 
 import Home from "./pages/Home";
-import User from "./pages/User";
 import Staff from "./pages/Staff";
-import ChangePasswordContent from "./component/ChangePasswordContent";
-import DeleteAccountContent from "./component/DeleteAccountContent";
 import MainLayout from "./layouts/MainLayout";
 import LoginModal from "./component/LoginModal";
 import RegisterModal from "./component/RegisterModal";
+
+// --- IMPORT CÁC TRANG USER ---
+import User from "./pages/User";
+import ChangePasswordContent from "./component/user/ChangePasswordContent";
+import DeleteAccountContent from "./component/user/DeleteAccountContent";
+import UserBooking from "./component/user/UserBooking";
+
 // --- IMPORT CÁC TRANG STAFF ---
 import Booking from "./component/staff/Booking";
 import DriverList from "./component/staff/DriverList";
@@ -53,11 +57,12 @@ function App() {
           <Route index element={<User />} />
           <Route path="change-password" element={<ChangePasswordContent />} />
           <Route path="delete-account" element={<DeleteAccountContent />} />
+          <Route path="booking" element={<UserBooking />} />
         </Route>
 
 
         {/*STAFF*/}
-        <Route
+        <Route 
           path="/staff"
           element={<MainLayout openLogin={() => setAuthModal("login")} role={"staff"} setRole={setRole} sidebarType="staff" />}
         >
@@ -67,8 +72,6 @@ function App() {
           <Route path="booking" element={<Booking />} />
           <Route path="driver-list" element={<DriverList/>}/>
           <Route path="vehicle-list" element={<VehicleList/>}/>
-          <Route path="handover" element={<HandoverCar />} />
-          <Route path="return-ai" element={<ReturnCarAI />} />
         </Route>
 
 

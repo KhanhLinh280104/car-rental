@@ -1,6 +1,6 @@
 import React from 'react';
 import { AlertTriangle } from 'lucide-react';
-import { useNotification } from "../context/NotificationContext"; // 1. Import
+import { useNotification } from "../../context/NotificationContext"; // 1. Import
 
 const DeleteAccountContent = () => {
   const { notifySuccess } = useNotification(); // 2. Lấy hàm
