@@ -34,6 +34,7 @@ const LoginModal = ({ close, goRegister, successMessage }) => {
 
     localStorage.removeItem("token");
     localStorage.removeItem("role");
+    localStorage.removeItem("userId");
 
     try {
       const res = await loginApi({ email, password });
@@ -41,7 +42,17 @@ const LoginModal = ({ close, goRegister, successMessage }) => {
       const token = res.data.accessToken;
       const refreshToken = res.data.refreshToken;
       const role = res.data.role;
-      
+
+      // Lấy userId UUID từ response (ưu tiên), fallback decode JWT nếu server cũ
+      let userId = res.data.userId;
+      if (!userId) {
+        try {
+          const payload = JSON.parse(atob(token.split(".")[1]));
+          userId = payload.userId || payload.sub;
+        } catch (_) { /* ignore */ }
+      }
+      if (userId) localStorage.setItem("userId", userId);
+
       localStorage.setItem("token", token);
       localStorage.setItem("refreshToken", refreshToken);
       localStorage.setItem("role", role);
@@ -55,7 +66,7 @@ const LoginModal = ({ close, goRegister, successMessage }) => {
 
     } catch (err) {
       console.error("Login Error:", err);
-      
+
       notifyError("Bạn đã nhập sai mật khẩu hoặc sai email đăng nhập, vui lòng thử lại");
     }
   };
@@ -78,7 +89,7 @@ const LoginModal = ({ close, goRegister, successMessage }) => {
         </button>
 
         <h2 className="text-2xl font-bold text-center mb-6">Đăng nhập</h2>
-        
+
         {/* Nếu có tin nhắn thành công từ trang Register chuyển sang thì hiện ở đây */}
         {successMessage && (
           <div className="mb-6 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2 text-green-700 animate-pulse">
