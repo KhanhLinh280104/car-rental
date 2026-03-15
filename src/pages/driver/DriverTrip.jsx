@@ -1,558 +1,451 @@
-import { useState } from "react";
-import { Clock, CheckCircle, X, AlertCircle, MapPin, User, Phone, DollarSign, Navigation, Play, StopCircle, LogIn, LogOut } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import {
+  Clock, CheckCircle, X, AlertCircle, MapPin, User, Phone,
+  Navigation, Play, StopCircle, LogIn, LogOut, Loader2,
+  AlertTriangle, RefreshCw, Car,
+} from "lucide-react";
+import {
+  getDriverByUserIdApi,
+  getDriverBookingsApi,
+  driverPickupConfirmedApi,
+  driverCompleteTripApi,
+} from "../../api/bookingApi";
+
+// ─── Helpers ───────────────────────────────────────────────────────────────
+const fmtDate = (s) =>
+  s ? new Date(s).toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" }) : "—";
+
+// ─── Modal nhập Odometer ───────────────────────────────────────────────────
+function OdometerModal({ title, unit, onConfirm, onClose }) {
+  const [odoMeter, setOdoMeter] = useState("");
+  const [condition, setCondition] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleSubmit = async () => {
+    if (!odoMeter || isNaN(Number(odoMeter)) || Number(odoMeter) < 0) {
+      setError("Vui lòng nhập số km đồng hồ hợp lệ.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await onConfirm({ odoMeter: Number(odoMeter), condition });
+      onClose();
+    } catch (e) {
+      setError(e.response?.data?.message || "Thao tác thất bại.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+        <div className="p-6 border-b border-gray-100">
+          <h2 className="text-xl font-bold text-gray-900">{title}</h2>
+          <p className="text-sm text-gray-500 mt-1">Xe #{unit.vehicleId}</p>
+        </div>
+        <div className="p-6 space-y-4">
+          {error && (
+            <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">
+              <AlertTriangle size={16} /> {error}
+            </div>
+          )}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Số km đồng hồ tại thời điểm hiện tại *
+            </label>
+            <input
+              type="number"
+              min={0}
+              value={odoMeter}
+              onChange={(e) => setOdoMeter(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              placeholder="Ví dụ: 52340"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Tình trạng xe (tuỳ chọn)
+            </label>
+            <textarea
+              rows={3}
+              value={condition}
+              onChange={(e) => setCondition(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-400"
+              placeholder="Mô tả tình trạng xe: lốp, đèn, vết xước..."
+            />
+          </div>
+        </div>
+        <div className="p-6 border-t border-gray-100 flex justify-end gap-3">
+          <button
+            onClick={onClose}
+            className="px-5 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition text-sm font-medium"
+          >
+            Huỷ
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={saving}
+            className="px-5 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition text-sm font-medium flex items-center gap-2 disabled:opacity-60"
+          >
+            {saving && <Loader2 size={14} className="animate-spin" />}
+            Xác nhận
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Trip Card ─────────────────────────────────────────────────────────────
+function TripCard({ booking, driverProfileId, onRefresh }) {
+  const [modal, setModal] = useState(null); // "pickup" | "complete"
+  const [activeUnit, setActiveUnit] = useState(null);
+
+  // Lấy đơn vị xe đầu tiên (các booking có tài xế chỉ có 1 xe)
+  const unit = booking.rentalUnits?.[0] || null;
+
+  const handlePickup = async (formData) => {
+    await driverPickupConfirmedApi(booking.id, {
+      rentalUnitId: unit.id,
+      type: "PICKUP",
+      odoMeter: formData.odoMeter,
+      condition: formData.condition,
+    });
+    onRefresh();
+  };
+
+  const handleComplete = async (formData) => {
+    await driverCompleteTripApi(booking.id, {
+      rentalUnitId: unit.id,
+      type: "RETURN",
+      odoMeter: formData.odoMeter,
+      condition: formData.condition,
+    });
+    onRefresh();
+  };
+
+  const openPickup = () => { setActiveUnit(unit); setModal("pickup"); };
+  const openComplete = () => { setActiveUnit(unit); setModal("complete"); };
+
+  return (
+    <>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Trip info */}
+          <div className="md:col-span-2 space-y-4">
+            {/* Header */}
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-gray-800">
+                  #{booking.id}
+                  {booking.bookingCode && (
+                    <span className="ml-2 text-xs font-mono text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
+                      {booking.bookingCode}
+                    </span>
+                  )}
+                </h3>
+                <p className="text-xs text-gray-400 mt-0.5">Tạo lúc: {fmtDate(booking.createdAt)}</p>
+              </div>
+              <span className={`px-3 py-1 text-xs font-semibold rounded-full border ${booking.status === "CONFIRMED"
+                ? "bg-yellow-100 text-yellow-700 border-yellow-200"
+                : booking.status === "IN_PROGRESS"
+                  ? "bg-blue-100 text-blue-700 border-blue-200 animate-pulse"
+                  : "bg-green-100 text-green-700 border-green-200"
+                }`}>
+                {booking.status === "CONFIRMED" ? "Chờ đón khách" :
+                  booking.status === "IN_PROGRESS" ? "🟢 Đang thực hiện" : "✅ Hoàn thành"}
+              </span>
+            </div>
+
+            {/* Customer info */}
+            <div className="bg-gray-50 rounded-xl px-4 py-3 space-y-1.5 text-sm">
+              <div className="flex items-center gap-2 text-gray-700">
+                <User size={15} className="text-gray-400" />
+                <span className="font-medium">{booking.userId}</span>
+              </div>
+              {booking.deliveryMode === "DELIVERY" && booking.deliveryAddress && (
+                <div className="flex items-center gap-2 text-gray-700">
+                  <MapPin size={15} className="text-gray-400" />
+                  <span>{booking.deliveryAddress}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Rental units */}
+            {unit && (
+              <div className="text-sm space-y-1.5">
+                <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">Chi tiết xe</p>
+                <div className="border border-gray-200 rounded-xl px-4 py-3 bg-white">
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-2 font-medium text-gray-700">
+                      <Car size={15} className="text-gray-400" /> Xe #{unit.vehicleId}
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      {fmtDate(unit.startTime)} → {fmtDate(unit.endTime)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Actions */}
+          <div className="flex flex-col gap-3 justify-center">
+            {booking.status === "CONFIRMED" && (
+              <button
+                onClick={openPickup}
+                className="flex items-center justify-center gap-2 px-5 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition font-semibold text-sm shadow-sm"
+              >
+                <CheckCircle size={18} />
+                Xác nhận đón khách
+              </button>
+            )}
+            {booking.status === "IN_PROGRESS" && (
+              <button
+                onClick={openComplete}
+                className="flex items-center justify-center gap-2 px-5 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition font-semibold text-sm shadow-sm"
+              >
+                <StopCircle size={18} />
+                Hoàn thành chuyến
+              </button>
+            )}
+            {booking.status === "COMPLETED" && (
+              <div className="px-4 py-3 bg-green-50 border border-green-200 text-green-700 rounded-xl text-center text-sm font-semibold">
+                ✅ Chuyến đã hoàn thành
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {modal === "pickup" && activeUnit && (
+        <OdometerModal
+          title="Xác nhận đón khách"
+          unit={activeUnit}
+          onConfirm={handlePickup}
+          onClose={() => setModal(null)}
+        />
+      )}
+      {modal === "complete" && activeUnit && (
+        <OdometerModal
+          title="Hoàn thành chuyến đi"
+          unit={activeUnit}
+          onConfirm={handleComplete}
+          onClose={() => setModal(null)}
+        />
+      )}
+    </>
+  );
+}
+
+// ─── Main ──────────────────────────────────────────────────────────────────
+const TABS = [
+  { key: "CONFIRMED", label: "Chờ đón khách", icon: "📋" },
+  { key: "IN_PROGRESS", label: "Đang thực hiện", icon: "🚗" },
+  { key: "COMPLETED", label: "Đã hoàn thành", icon: "✅" },
+];
 
 export default function DriverTrip() {
   const [checkedIn, setCheckedIn] = useState(false);
   const [checkInTime, setCheckInTime] = useState(null);
-  const [activeTab, setActiveTab] = useState("pending"); // pending, ongoing, completed
-  const [selectedTrip, setSelectedTrip] = useState(null);
-  const [successMessage, setSuccessMessage] = useState("");
+  const [activeTab, setActiveTab] = useState("CONFIRMED");
+  const [bookings, setBookings] = useState([]);
+  const [driverProfileId, setDriverProfileId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [flashMsg, setFlashMsg] = useState("");
 
-  const [trips, setTrips] = useState([
-    {
-      id: "TRIP001",
-      passenger: "Lê Thanh B",
-      phone: "0912345678",
-      from: "Tân Sơn Nhất",
-      to: "Quận 1",
-      distance: 12.5,
-      estimatedFare: 450000,
-      startTime: "14:30",
-      bookingTime: "02/02/2026 14:00",
-      status: "pending",
-      notes: "Khách hành lý ít",
-    },
-    {
-      id: "TRIP002",
-      passenger: "Trần Minh C",
-      phone: "0987654321",
-      from: "Quận 3",
-      to: "Bình Thạnh",
-      distance: 8.2,
-      estimatedFare: 320000,
-      startTime: "15:45",
-      bookingTime: "02/02/2026 15:15",
-      status: "pending",
-      notes: "Thanh toán bằng tiền mặt",
-    },
-    {
-      id: "TRIP003",
-      passenger: "Phạm Hùng D",
-      phone: "0934567890",
-      from: "Quận 5",
-      to: "Quận 7",
-      distance: 10.8,
-      estimatedFare: 380000,
-      startTime: "16:00",
-      bookingTime: "02/02/2026 15:20",
-      status: "pending",
-      notes: "Khách đợi tại cổng chính",
-    },
-  ]);
+  // Dùng ref để cache profileId, tránh double-fetch do driverProfileId trong deps
+  const profileIdRef = useRef(null);
 
-  const [ongoingTrips, setOngoingTrips] = useState([
-    {
-      id: "TRIP004",
-      passenger: "Võ Minh E",
-      phone: "0945678901",
-      from: "Sân bay Tân Sơn Nhất",
-      to: "Quận 2",
-      distance: 15.3,
-      estimatedFare: 520000,
-      startTime: "13:30",
-      startedAt: "02/02/2026 13:32",
-      status: "ongoing",
-      notes: "Khách hành lý nhiều",
-    },
-  ]);
+  const userId = localStorage.getItem("userId");
 
-  const [completedTrips, setCompletedTrips] = useState([
-    {
-      id: "TRIP005",
-      passenger: "Ngô Thị F",
-      phone: "0956789012",
-      from: "Trung tâm Hồ Chí Minh",
-      to: "Thủ Đức",
-      distance: 11.2,
-      estimatedFare: 380000,
-      actualFare: 380000,
-      startTime: "10:00",
-      endTime: "11:15",
-      rating: 5,
-      status: "completed",
-      notes: "Hoàn thành",
-    },
-  ]);
+  const flash = (msg) => {
+    setFlashMsg(msg);
+    setTimeout(() => setFlashMsg(""), 3000);
+  };
+
+  // Fetch bookings assigned to this driver
+  const fetchBookings = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      // 1. Lấy profile tài xế — chỉ gọi IAM 1 lần, cache vào ref
+      let profileId = profileIdRef.current;
+      if (!profileId && userId) {
+        try {
+          const profileRes = await getDriverByUserIdApi(userId);
+          profileId = profileRes.data?.data?.id;
+          if (profileId) {
+            profileIdRef.current = profileId;
+            setDriverProfileId(profileId);
+          }
+        } catch (e) {
+          console.warn("[DriverTrip] Không tìm thấy profile tài xế cho userId:", userId);
+        }
+      }
+
+      if (!profileId) {
+        setBookings([]);
+        setError("Tài khoản chưa có hồ sơ tài xế. Vui lòng liên hệ quản trị viên.");
+        return;
+      }
+
+      // 2. Lấy booking của tài xế theo tab đang chọn
+      const res = await getDriverBookingsApi(profileId, activeTab, 0, 50);
+      setBookings(res.data?.data?.content || []);
+    } catch (e) {
+      console.error("[DriverTrip] Lỗi fetch bookings:", e);
+      setError("Không thể tải danh sách chuyến. Vui lòng thử lại.");
+    } finally {
+      setLoading(false);
+    }
+  }, [activeTab, userId]); // profileIdRef không cần trong deps vì là ref
+
+  useEffect(() => {
+    fetchBookings();
+  }, [fetchBookings]);
 
   const handleCheckIn = () => {
     const now = new Date();
     setCheckInTime(now.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }));
     setCheckedIn(true);
-    setSuccessMessage("✅ Check-in thành công!");
-    setTimeout(() => setSuccessMessage(""), 3000);
+    flash("✅ Check-in thành công!");
   };
 
   const handleCheckOut = () => {
     setCheckedIn(false);
     setCheckInTime(null);
-    setSuccessMessage("✅ Check-out thành công!");
-    setTimeout(() => setSuccessMessage(""), 3000);
-  };
-
-  const handleAcceptTrip = (tripId) => {
-    const trip = trips.find((t) => t.id === tripId);
-    if (trip) {
-      setTrips(trips.filter((t) => t.id !== tripId));
-      setOngoingTrips([
-        ...ongoingTrips,
-        {
-          ...trip,
-          status: "ongoing",
-          startedAt: new Date().toLocaleString("vi-VN"),
-        },
-      ]);
-      setSuccessMessage("✅ Chấp nhận chuyến đi thành công!");
-      setTimeout(() => setSuccessMessage(""), 3000);
-    }
-  };
-
-  const handleRejectTrip = (tripId) => {
-    const trip = trips.find((t) => t.id === tripId);
-    if (trip) {
-      setTrips(trips.filter((t) => t.id !== tripId));
-      setSuccessMessage("✅ Từ chối chuyến đi!");
-      setTimeout(() => setSuccessMessage(""), 3000);
-    }
-  };
-
-  const handleStartTrip = (tripId) => {
-    const trip = ongoingTrips.find((t) => t.id === tripId);
-    if (trip) {
-      setOngoingTrips(
-        ongoingTrips.map((t) =>
-          t.id === tripId ? { ...t, tripStarted: true, tripStartedAt: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) } : t
-        )
-      );
-      setSuccessMessage("🚗 Bắt đầu chuyến đi!");
-      setTimeout(() => setSuccessMessage(""), 3000);
-    }
-  };
-
-  const handleCompleteTrip = (tripId) => {
-    const trip = ongoingTrips.find((t) => t.id === tripId);
-    if (trip) {
-      setOngoingTrips(ongoingTrips.filter((t) => t.id !== tripId));
-      setCompletedTrips([
-        ...completedTrips,
-        {
-          ...trip,
-          status: "completed",
-          endTime: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
-          actualFare: trip.estimatedFare,
-          rating: 0,
-        },
-      ]);
-      setSuccessMessage("✅ Kết thúc chuyến đi thành công!");
-      setTimeout(() => setSuccessMessage(""), 3000);
-    }
+    flash("✅ Check-out thành công!");
   };
 
   return (
-    <div className="w-full max-w-6xl mx-auto px-4 py-8">
-      {/* === HEADER === */}
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold text-gray-800 mb-2">Quản lý chuyến đi</h1>
-        <p className="text-gray-600">Chấp nhận/từ chối chuyến, quản lý check-in/check-out</p>
+    <div className="w-full max-w-6xl mx-auto px-4 py-8 space-y-8">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-4xl font-bold text-gray-800">Quản lý chuyến đi</h1>
+          <p className="text-gray-500 mt-1">Theo dõi và xử lý các chuyến xe được phân công.</p>
+        </div>
+        <button
+          onClick={fetchBookings}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition text-sm font-medium"
+        >
+          <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
+          Làm mới
+        </button>
       </div>
 
-      {/* === SUCCESS MESSAGE === */}
-      {successMessage && (
-        <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center space-x-3">
-          <CheckCircle className="text-green-600" size={20} />
-          <span className="text-green-700 font-medium">{successMessage}</span>
+      {/* Flash message */}
+      {flashMsg && (
+        <div className="flex items-center gap-2 p-4 bg-green-50 border border-green-200 rounded-xl text-green-700 font-medium text-sm">
+          <CheckCircle size={18} /> {flashMsg}
         </div>
       )}
 
-      {/* === DAILY CHECK-IN/CHECK-OUT === */}
-      <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-xl shadow-md border border-blue-200 p-8 mb-8">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center space-x-3">
-          <Clock className="text-blue-500" size={28} />
-          <span>Checkin / Checkout hàng ngày</span>
+      {/* Check-in/Check-out */}
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border border-blue-200 p-6">
+        <h2 className="text-xl font-bold text-gray-800 mb-5 flex items-center gap-2">
+          <Clock className="text-blue-500" size={24} />
+          Check-in / Check-out hàng ngày
         </h2>
-
         {!checkedIn ? (
-          <div className="flex flex-col md:flex-row items-center justify-between bg-white rounded-lg p-6 border border-blue-300">
+          <div className="flex flex-col sm:flex-row items-center justify-between bg-white rounded-xl p-5 border border-blue-200 gap-4">
             <div>
-              <p className="text-gray-700 font-medium mb-2">Bạn chưa check-in hôm nay</p>
-              <p className="text-sm text-gray-600">Nhấn nút bên dưới để bắt đầu ca làm việc</p>
+              <p className="font-medium text-gray-700">Bạn chưa check-in hôm nay</p>
+              <p className="text-sm text-gray-500 mt-0.5">Nhấn để bắt đầu ca làm việc</p>
             </div>
             <button
               onClick={handleCheckIn}
-              className="mt-4 md:mt-0 flex items-center space-x-2 px-8 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition font-semibold shadow-md"
+              className="flex items-center gap-2 px-8 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition font-semibold shadow-sm"
             >
-              <LogIn size={20} />
-              <span>Check-in ngay</span>
+              <LogIn size={18} /> Check-in ngay
             </button>
           </div>
         ) : (
-          <div className="flex flex-col md:flex-row items-center justify-between bg-white rounded-lg p-6 border border-green-300">
+          <div className="flex flex-col sm:flex-row items-center justify-between bg-white rounded-xl p-5 border border-green-300 gap-4">
             <div>
-              <p className="text-gray-700 font-medium mb-2">✅ Bạn đã check-in</p>
-              <p className="text-sm text-gray-600">Thời gian check-in: {checkInTime}</p>
+              <p className="font-medium text-green-700">✅ Đã check-in lúc {checkInTime}</p>
+              <p className="text-sm text-gray-500 mt-0.5">Ca làm việc đang diễn ra</p>
             </div>
             <button
               onClick={handleCheckOut}
-              className="mt-4 md:mt-0 flex items-center space-x-2 px-8 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition font-semibold shadow-md"
+              className="flex items-center gap-2 px-8 py-3 bg-red-500 text-white rounded-xl hover:bg-red-600 transition font-semibold shadow-sm"
             >
-              <LogOut size={20} />
-              <span>Check-out</span>
+              <LogOut size={18} /> Check-out
             </button>
           </div>
         )}
       </div>
 
-      {/* === TABS === */}
-      <div className="flex space-x-2 mb-8 border-b border-gray-200">
-        <button
-          onClick={() => setActiveTab("pending")}
-          className={`px-6 py-3 font-semibold transition ${
-            activeTab === "pending"
+      {/* Tabs */}
+      <div className="flex border-b border-gray-200 gap-1">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setActiveTab(t.key)}
+            className={`px-5 py-3 text-sm font-semibold transition whitespace-nowrap ${activeTab === t.key
               ? "text-blue-600 border-b-2 border-blue-600"
-              : "text-gray-600 hover:text-gray-800"
-          }`}
-        >
-          📋 Chuyến chờ phân công ({trips.length})
-        </button>
-        <button
-          onClick={() => setActiveTab("ongoing")}
-          className={`px-6 py-3 font-semibold transition ${
-            activeTab === "ongoing"
-              ? "text-blue-600 border-b-2 border-blue-600"
-              : "text-gray-600 hover:text-gray-800"
-          }`}
-        >
-          🚗 Chuyến đang thực hiện ({ongoingTrips.length})
-        </button>
-        <button
-          onClick={() => setActiveTab("completed")}
-          className={`px-6 py-3 font-semibold transition ${
-            activeTab === "completed"
-              ? "text-blue-600 border-b-2 border-blue-600"
-              : "text-gray-600 hover:text-gray-800"
-          }`}
-        >
-          ✅ Chuyến đã hoàn thành ({completedTrips.length})
-        </button>
+              : "text-gray-500 hover:text-gray-800"
+              }`}
+          >
+            {t.icon} {t.label}
+            {!loading && (
+              <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full ${activeTab === t.key ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-500"
+                }`}>
+                {bookings.length}
+              </span>
+            )}
+          </button>
+        ))}
       </div>
 
-      {/* === PENDING TRIPS TAB === */}
-      {activeTab === "pending" && (
-        <div className="space-y-4">
-          {trips.length > 0 ? (
-            trips.map((trip) => (
-              <div
-                key={trip.id}
-                className="bg-white rounded-xl shadow-md border border-gray-200 p-6 hover:shadow-lg transition"
+      {/* Content */}
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-24 gap-3">
+          <Loader2 className="animate-spin text-blue-500" size={36} />
+          <p className="text-gray-500 text-sm">Đang tải danh sách chuyến...</p>
+        </div>
+      ) : error ? (
+        <div className="flex flex-col items-center py-20 gap-4 text-center">
+          <AlertTriangle size={40} className="text-red-400" />
+          <p className="text-red-600 font-medium">{error}</p>
+          <button
+            onClick={fetchBookings}
+            className="px-5 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition text-sm"
+          >
+            Thử lại
+          </button>
+        </div>
+      ) : bookings.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-24 gap-3 bg-gray-50 rounded-2xl">
+          <AlertCircle size={40} className="text-gray-300" />
+          <p className="text-gray-500 font-medium">Không có chuyến đi nào trong mục này.</p>
+          {activeTab !== "COMPLETED" && (
+            <p className="text-sm text-gray-400">
+              Chuyến đã hoàn thành? Chọn tab{" "}
+              <button
+                onClick={() => setActiveTab("COMPLETED")}
+                className="text-blue-500 underline hover:text-blue-700 font-medium"
               >
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {/* Trip Info */}
-                  <div className="md:col-span-2 space-y-4">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h3 className="text-xl font-bold text-gray-800 mb-1">
-                          {trip.id}
-                        </h3>
-                        <p className="text-sm text-gray-500">Phân công lúc: {trip.bookingTime}</p>
-                      </div>
-                      <span className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-full text-sm font-semibold">
-                        Chờ duyệt
-                      </span>
-                    </div>
-
-                    {/* Passenger Info */}
-                    <div className="bg-gray-50 rounded-lg p-4">
-                      <div className="flex items-center space-x-2 mb-3">
-                        <User size={18} className="text-gray-600" />
-                        <span className="font-semibold text-gray-800">{trip.passenger}</span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Phone size={16} className="text-gray-600" />
-                        <span className="text-gray-700">{trip.phone}</span>
-                      </div>
-                    </div>
-
-                    {/* Route */}
-                    <div className="flex items-center space-x-4">
-                      <div>
-                        <p className="text-sm text-gray-600 mb-1">Điểm đi</p>
-                        <p className="font-semibold text-gray-800">{trip.from}</p>
-                      </div>
-                      <Navigation className="text-blue-500" size={24} />
-                      <div>
-                        <p className="text-sm text-gray-600 mb-1">Điểm đến</p>
-                        <p className="font-semibold text-gray-800">{trip.to}</p>
-                      </div>
-                    </div>
-
-                    {/* Details */}
-                    <div className="grid grid-cols-3 gap-3">
-                      <div className="bg-blue-50 rounded-lg p-3">
-                        <p className="text-xs text-gray-600">Khoảng cách</p>
-                        <p className="font-semibold text-gray-800">{trip.distance} km</p>
-                      </div>
-                      <div className="bg-green-50 rounded-lg p-3">
-                        <p className="text-xs text-gray-600">Giá dự kiến</p>
-                        <p className="font-semibold text-gray-800">
-                          {(trip.estimatedFare / 1000).toFixed(0)}K
-                        </p>
-                      </div>
-                      <div className="bg-purple-50 rounded-lg p-3">
-                        <p className="text-xs text-gray-600">Thời gian</p>
-                        <p className="font-semibold text-gray-800">{trip.startTime}</p>
-                      </div>
-                    </div>
-
-                    {trip.notes && (
-                      <div className="bg-blue-50 border-l-4 border-blue-500 p-3 rounded">
-                        <p className="text-sm text-gray-700">📝 {trip.notes}</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex flex-col space-y-3 justify-center">
-                    <button
-                      onClick={() => handleAcceptTrip(trip.id)}
-                      className="flex items-center justify-center space-x-2 px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition font-semibold"
-                    >
-                      <CheckCircle size={20} />
-                      <span>Chấp nhận</span>
-                    </button>
-                    <button
-                      onClick={() => handleRejectTrip(trip.id)}
-                      className="flex items-center justify-center space-x-2 px-6 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition font-semibold"
-                    >
-                      <X size={20} />
-                      <span>Từ chối</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))
-          ) : (
-            <div className="bg-gray-50 rounded-xl p-12 text-center">
-              <AlertCircle className="mx-auto text-gray-400 mb-3" size={48} />
-              <p className="text-gray-600 font-medium">Không có chuyến đi chờ phân công</p>
-            </div>
+                ✅ Đã hoàn thành
+              </button>
+            </p>
           )}
         </div>
-      )}
-
-      {/* === ONGOING TRIPS TAB === */}
-      {activeTab === "ongoing" && (
+      ) : (
         <div className="space-y-4">
-          {ongoingTrips.length > 0 ? (
-            ongoingTrips.map((trip) => (
-              <div
-                key={trip.id}
-                className="bg-white rounded-xl shadow-md border-2 border-blue-300 p-6 hover:shadow-lg transition bg-blue-50"
-              >
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {/* Trip Info */}
-                  <div className="md:col-span-2 space-y-4">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h3 className="text-xl font-bold text-gray-800 mb-1">
-                          {trip.id}
-                        </h3>
-                        <p className="text-sm text-gray-500">Nhận lúc: {trip.startedAt}</p>
-                      </div>
-                      <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-semibold animate-pulse">
-                        🟢 Đang thực hiện
-                      </span>
-                    </div>
-
-                    {/* Passenger Info */}
-                    <div className="bg-white rounded-lg p-4 border border-gray-200">
-                      <div className="flex items-center space-x-2 mb-3">
-                        <User size={18} className="text-gray-600" />
-                        <span className="font-semibold text-gray-800">{trip.passenger}</span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Phone size={16} className="text-gray-600" />
-                        <span className="text-gray-700">{trip.phone}</span>
-                      </div>
-                    </div>
-
-                    {/* Route */}
-                    <div className="flex items-center space-x-4">
-                      <div>
-                        <p className="text-sm text-gray-600 mb-1">Điểm đi</p>
-                        <p className="font-semibold text-gray-800">{trip.from}</p>
-                      </div>
-                      <Navigation className="text-blue-500" size={24} />
-                      <div>
-                        <p className="text-sm text-gray-600 mb-1">Điểm đến</p>
-                        <p className="font-semibold text-gray-800">{trip.to}</p>
-                      </div>
-                    </div>
-
-                    {/* Details */}
-                    <div className="grid grid-cols-3 gap-3">
-                      <div className="bg-white rounded-lg p-3 border border-gray-200">
-                        <p className="text-xs text-gray-600">Khoảng cách</p>
-                        <p className="font-semibold text-gray-800">{trip.distance} km</p>
-                      </div>
-                      <div className="bg-white rounded-lg p-3 border border-gray-200">
-                        <p className="text-xs text-gray-600">Giá dự kiến</p>
-                        <p className="font-semibold text-gray-800">
-                          {(trip.estimatedFare / 1000).toFixed(0)}K
-                        </p>
-                      </div>
-                      <div className="bg-white rounded-lg p-3 border border-gray-200">
-                        <p className="text-xs text-gray-600">Thời gian</p>
-                        <p className="font-semibold text-gray-800">{trip.startTime}</p>
-                      </div>
-                    </div>
-
-                    {trip.notes && (
-                      <div className="bg-white border-l-4 border-blue-500 p-3 rounded">
-                        <p className="text-sm text-gray-700">📝 {trip.notes}</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex flex-col space-y-3 justify-center">
-                    {!trip.tripStarted ? (
-                      <button
-                        onClick={() => handleStartTrip(trip.id)}
-                        className="flex items-center justify-center space-x-2 px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition font-semibold"
-                      >
-                        <Play size={20} />
-                        <span>Bắt đầu chuyến</span>
-                      </button>
-                    ) : (
-                      <>
-                        <div className="px-6 py-3 bg-green-100 text-green-700 rounded-lg font-semibold text-center border border-green-300">
-                          ✅ Đã bắt đầu
-                        </div>
-                        <button
-                          onClick={() => handleCompleteTrip(trip.id)}
-                          className="flex items-center justify-center space-x-2 px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition font-semibold"
-                        >
-                          <StopCircle size={20} />
-                          <span>Kết thúc chuyến</span>
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))
-          ) : (
-            <div className="bg-gray-50 rounded-xl p-12 text-center">
-              <AlertCircle className="mx-auto text-gray-400 mb-3" size={48} />
-              <p className="text-gray-600 font-medium">Không có chuyến đi nào đang thực hiện</p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* === COMPLETED TRIPS TAB === */}
-      {activeTab === "completed" && (
-        <div className="space-y-4">
-          {completedTrips.length > 0 ? (
-            completedTrips.map((trip) => (
-              <div
-                key={trip.id}
-                className="bg-white rounded-xl shadow-md border border-green-200 p-6 hover:shadow-lg transition bg-green-50"
-              >
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {/* Trip Info */}
-                  <div className="md:col-span-2 space-y-4">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h3 className="text-xl font-bold text-gray-800 mb-1">
-                          {trip.id}
-                        </h3>
-                        <p className="text-sm text-gray-500">
-                          {trip.startTime} → {trip.endTime}
-                        </p>
-                      </div>
-                      <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-semibold">
-                        ✅ Hoàn thành
-                      </span>
-                    </div>
-
-                    {/* Passenger Info */}
-                    <div className="bg-white rounded-lg p-4 border border-gray-200">
-                      <div className="flex items-center space-x-2 mb-3">
-                        <User size={18} className="text-gray-600" />
-                        <span className="font-semibold text-gray-800">{trip.passenger}</span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Phone size={16} className="text-gray-600" />
-                        <span className="text-gray-700">{trip.phone}</span>
-                      </div>
-                    </div>
-
-                    {/* Route */}
-                    <div className="flex items-center space-x-4">
-                      <div>
-                        <p className="text-sm text-gray-600 mb-1">Điểm đi</p>
-                        <p className="font-semibold text-gray-800">{trip.from}</p>
-                      </div>
-                      <Navigation className="text-green-500" size={24} />
-                      <div>
-                        <p className="text-sm text-gray-600 mb-1">Điểm đến</p>
-                        <p className="font-semibold text-gray-800">{trip.to}</p>
-                      </div>
-                    </div>
-
-                    {/* Details */}
-                    <div className="grid grid-cols-4 gap-3">
-                      <div className="bg-white rounded-lg p-3 border border-gray-200">
-                        <p className="text-xs text-gray-600">Khoảng cách</p>
-                        <p className="font-semibold text-gray-800">{trip.distance} km</p>
-                      </div>
-                      <div className="bg-white rounded-lg p-3 border border-gray-200">
-                        <p className="text-xs text-gray-600">Giá</p>
-                        <p className="font-semibold text-green-600">
-                          +{(trip.actualFare / 1000).toFixed(0)}K
-                        </p>
-                      </div>
-                      <div className="bg-white rounded-lg p-3 border border-gray-200">
-                        <p className="text-xs text-gray-600">Đánh giá</p>
-                        <p className="font-semibold text-gray-800">
-                          {trip.rating > 0 ? `⭐ ${trip.rating}/5` : "Chưa đánh giá"}
-                        </p>
-                      </div>
-                      <div className="bg-white rounded-lg p-3 border border-gray-200">
-                        <p className="text-xs text-gray-600">Thời gian</p>
-                        <p className="font-semibold text-gray-800">~45 phút</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex flex-col space-y-3 justify-center">
-                    <div className="px-6 py-3 bg-green-100 text-green-700 rounded-lg font-semibold text-center border border-green-300">
-                      ✅ Chuyến đã hoàn thành
-                    </div>
-                    <button className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition font-semibold">
-                      Xem chi tiết
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))
-          ) : (
-            <div className="bg-gray-50 rounded-xl p-12 text-center">
-              <AlertCircle className="mx-auto text-gray-400 mb-3" size={48} />
-              <p className="text-gray-600 font-medium">Chưa có chuyến đi nào hoàn thành</p>
-            </div>
-          )}
+          {bookings.map((b) => (
+            <TripCard
+              key={b.id}
+              booking={b}
+              driverProfileId={driverProfileId}
+              onRefresh={fetchBookings}
+            />
+          ))}
         </div>
       )}
     </div>

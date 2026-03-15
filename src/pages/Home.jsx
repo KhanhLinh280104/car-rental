@@ -1,12 +1,11 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import Header from "../component/Header";
 import Footer from "../component/Footer";
 import Hero from "../component/Hero";
 import CarBrand from "../component/CarBrand";
 import WhyChooseUs from "../component/WhyChooseUs";
 import RentalProcess from "../component/RentalProcess";
-import SearchTab from "../component/SearchTab";
+import VehicleSection from "../component/VehicleSection";
 import LoginModal from "../component/LoginModal";
 import RegisterModal from "../component/RegisterModal";
 
@@ -18,16 +17,16 @@ const Home = () => {
   return (
     <>
       <Header openLogin={() => setAuthModal("login")} />
-      
+
       <div className="home">
         <Hero />
         <CarBrand />
+
+        {/* Danh sách xe thực từ database — khách hàng chọn và đặt ngay */}
+        <VehicleSection openLogin={() => setAuthModal("login")} />
+
         <WhyChooseUs />
         <RentalProcess />
-        
-        <div style={{ padding: "24px", textAlign: "center" }}>
-          <Link to="/user" className="text-green-600 hover:text-green-800 font-semibold">Đi tới trang User</Link>
-        </div>
       </div>
 
       <Footer />
