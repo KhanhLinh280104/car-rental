@@ -1,18 +1,20 @@
 import React, { useState } from 'react';
 import { FileText, Check, X, Eye } from 'lucide-react';
 import Swal from 'sweetalert2';
+import PaymentModal from '../../component/PaymentModal';
 
 // --- MOCK DATA: BOOKINGS ---
 const MOCK_BOOKINGS = [
-  { id: "BK001", customer: "Trần Văn C", car: "VinFast VF8", dates: "01/02 - 03/02", total: "2.400.000 đ", status: "Pending", payment: "Unpaid" },
-  { id: "BK002", customer: "Lê Thị D", car: "Kia Carnival", dates: "05/02 - 05/02", total: "1.200.000 đ", status: "Approved", payment: "Paid" },
-  { id: "BK003", customer: "Phạm E", car: "Tesla Model 3", dates: "10/02 - 12/02", total: "5.000.000 đ", status: "Completed", payment: "Paid" },
-  { id: "BK004", customer: "Nguyễn F", car: "VinFast VF e34", dates: "02/02 - 04/02", total: "1.800.000 đ", status: "Cancelled", payment: "Refunded" },
+  { id: "BK001", customer: "Trần Văn C", car: "VinFast VF8", dates: "01/02 - 03/02", total: "2.400.000 đ", status: "Pending", payment: "Unpaid", invoiceId: 123, amount: 2400000 },
+  { id: "BK002", customer: "Lê Thị D", car: "Kia Carnival", dates: "05/02 - 05/02", total: "1.200.000 đ", status: "Approved", payment: "Paid", invoiceId: 124, amount: 1200000 },
+  { id: "BK003", customer: "Phạm E", car: "Tesla Model 3", dates: "10/02 - 12/02", total: "5.000.000 đ", status: "Completed", payment: "Paid", invoiceId: 125, amount: 5000000 },
+  { id: "BK004", customer: "Nguyễn F", car: "VinFast VF e34", dates: "02/02 - 04/02", total: "1.800.000 đ", status: "Cancelled", payment: "Refunded", invoiceId: 126, amount: 1800000 },
 ];
 
 const AdminBookings = () => {
   // SỬA 1: Dùng MOCK_BOOKINGS làm giá trị khởi tạo
   const [bookings, setBookings] = useState(MOCK_BOOKINGS);
+  const [paymentModal, setPaymentModal] = useState({ show: false, invoiceId: null, amount: null });
 
   // Xử lý Duyệt đơn
   const handleApprove = (id) => {
@@ -50,6 +52,29 @@ const AdminBookings = () => {
     });
   };
 
+  // Xử lý thanh toán
+  const handlePayment = (booking) => {
+    setPaymentModal({
+      show: true,
+      invoiceId: booking.invoiceId,
+      amount: booking.amount,
+    });
+  };
+
+  const handlePaymentSuccess = (paymentData) => {
+    // Update booking payment status
+    setBookings(bookings.map(b => 
+      b.invoiceId === paymentData.invoiceId 
+        ? { ...b, payment: 'Paid' } 
+        : b
+    ));
+    setPaymentModal({ show: false, invoiceId: null, amount: null });
+  };
+
+  const closePaymentModal = () => {
+    setPaymentModal({ show: false, invoiceId: null, amount: null });
+  };
+
   const getStatusStyle = (status) => {
     switch(status) {
       case 'Pending': return 'bg-yellow-100 text-yellow-700';
@@ -73,6 +98,7 @@ const AdminBookings = () => {
               <th className="p-4">Thời gian</th>
               <th className="p-4">Tổng tiền</th>
               <th className="p-4">Trạng thái</th>
+              <th className="p-4">Thanh toán</th>
               <th className="p-4 text-center">Thao tác</th>
             </tr>
           </thead>
@@ -91,13 +117,22 @@ const AdminBookings = () => {
                   </span>
                 </td>
                 <td className="p-4">
+                  <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                    booking.payment === 'Paid' ? 'bg-green-100 text-green-700' :
+                    booking.payment === 'Unpaid' ? 'bg-red-100 text-red-700' :
+                    'bg-gray-100 text-gray-700'
+                  }`}>
+                    {booking.payment}
+                  </span>
+                </td>
+                <td className="p-4">
                   <div className="flex justify-center gap-2">
                     {booking.status === 'Pending' && (
                         <>
                             {/* SỬA 3: Thêm onClick vào các nút bấm */}
                             <button 
                               onClick={() => handleApprove(booking.id)}
-                              className="p-1.5 bg-green-100 text-green-600 rounded hover:bg-green-200" 
+                              className="p-1.5 bg-green-100 text-green-600 rounded hover:bg-green-200"
                               title="Duyệt"
                             >
                               <Check size={16}/>
@@ -111,6 +146,15 @@ const AdminBookings = () => {
                             </button>
                         </>
                     )}
+                    {booking.payment === 'Unpaid' && booking.status === 'Approved' && (
+                      <button 
+                        onClick={() => handlePayment(booking)}
+                        className="p-1.5 bg-blue-100 text-blue-600 rounded hover:bg-blue-200"
+                        title="Thanh toán"
+                      >
+                        <FileText size={16}/>
+                      </button>
+                    )}
                     <button className="p-1.5 bg-gray-100 text-gray-600 rounded hover:bg-gray-200" title="Chi tiết">
                       <Eye size={16}/>
                     </button>
@@ -121,6 +165,15 @@ const AdminBookings = () => {
           </tbody>
         </table>
       </div>
+
+      {paymentModal.show && (
+        <PaymentModal
+          invoiceId={paymentModal.invoiceId}
+          amount={paymentModal.amount}
+          onSuccess={handlePaymentSuccess}
+          onClose={closePaymentModal}
+        />
+      )}
     </div>
   );
 };
