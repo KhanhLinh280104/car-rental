@@ -1,37 +1,79 @@
-import React, { useState } from "react";
-import { User, Phone, CreditCard, Clock, Search } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { User, Phone, CreditCard, Clock, Search, Loader2, AlertCircle } from "lucide-react";
+import { getAllDriversApi } from "../../api/driverApi";
 
-const drivers = [
-  {
-    id: 1,
-    name: "Nguyễn Văn A",
-    driverCode: "DRV-123",
-    license: "B2 - 0123456789",
-    phone: "0912345678",
-    shift: "Ca sáng",
-    totalTrips: 25,
-    status: "Sẵn sàng",
-  },
-  {
-    id: 2,
-    name: "Nguyễn Văn B",
-    driverCode: "DRV-456",
-    license: "C - 9876543210",
-    phone: "0987654321",
-    shift: "Ca tối",
-    totalTrips: 18,
-    status: "Đang chạy",
-  },
-];
 
 const DriverList = () => {
+  const [drivers, setDrivers] = useState([]);
   const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // FILTER LOGIC
-  const filteredDrivers = drivers.filter((driver) =>
-    driver.name.toLowerCase().includes(search.toLowerCase()) ||
-    driver.shift.toLowerCase().includes(search.toLowerCase())
-  );
+  useEffect(() => {
+    const fetchDrivers = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const res = await getAllDriversApi();
+
+        // Tuỳ cấu trúc response: res.data, res.data.data, res.data.content...
+        const driverList = res.data?.data ?? res.data?.content ?? res.data ?? [];
+        setDrivers(driverList);
+      } catch (err) {
+        setError(err?.response?.data?.message || "Không thể tải danh sách tài xế");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDrivers();
+  }, []);
+
+  // Map field API → UI (điều chỉnh tên field theo response thật)
+  const mapDriver = (d) => ({
+    id: d.id,
+    name: d.fullName ?? d.name ?? "—",
+    driverCode: d.driverCode ?? d.code ?? "—",
+    license: d.licenseNumber ?? d.license ?? "—",
+    phone: d.phoneNumber ?? d.phone ?? "—",
+    shift: d.currentShift ?? d.shift ?? "—",
+    totalTrips: d.totalTrips ?? d.tripCount ?? 0,
+    status: d.status ?? "—",
+  });
+
+  const filteredDrivers = drivers
+    .map(mapDriver)
+    .filter(
+      (d) =>
+        d.name.toLowerCase().includes(search.toLowerCase()) ||
+        d.shift.toLowerCase().includes(search.toLowerCase())
+    );
+
+  // ---- UI States ----
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-3 text-gray-500">
+        <Loader2 className="animate-spin" size={32} />
+        <p>Đang tải danh sách tài xế...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-3 text-red-500">
+        <AlertCircle size={32} />
+        <p>{error}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="mt-2 px-4 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition"
+        >
+          Thử lại
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -57,12 +99,13 @@ const DriverList = () => {
               <h2 className="text-xl font-semibold">{driver.name}</h2>
               <p className="text-gray-500">{driver.driverCode}</p>
             </div>
-
             <span
               className={`px-4 py-1 text-sm rounded-full font-medium ${
-                driver.status === "Sẵn sàng"
+                driver.status === "ACTIVE"
                   ? "bg-blue-100 text-blue-600"
-                  : "bg-green-100 text-green-600"
+                  : driver.status === "INACTIVE"
+                  ? "bg-green-100 text-green-600"
+                  : "bg-gray-100 text-gray-500"
               }`}
             >
               {driver.status}
@@ -82,7 +125,6 @@ const DriverList = () => {
                 <CreditCard size={16} /> {driver.license}
               </p>
             </div>
-
             <div>
               <p className="text-gray-500 text-sm">Thời gian làm việc</p>
               <p className="font-medium flex items-center gap-2">
@@ -100,8 +142,7 @@ const DriverList = () => {
                 {driver.totalTrips} chuyến
               </p>
             </div>
-
-            {driver.status === "Sẵn sàng" && (
+            {driver.status === "ACTIVE" && (
               <button className="bg-green-600 text-white px-5 py-2 rounded-xl hover:bg-green-700 transition">
                 Phân công xe
               </button>

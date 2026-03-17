@@ -6,6 +6,7 @@ import Staff from "./pages/Staff";
 import MainLayout from "./layouts/MainLayout";
 import LoginModal from "./component/LoginModal";
 import RegisterModal from "./component/RegisterModal";
+import PaymentPage from "./pages/Payment";
 
 // --- IMPORT CÁC TRANG USER ---
 import User from "./pages/User";
@@ -22,6 +23,7 @@ import HandoverList from "./component/staff/HandoverList";
 import ReturnCarAI from "./component/staff/ReturnCarAI";
 import ReceiveCarList from "./component/staff/ReceiveCarList";
 import ReceiveCar from "./component/staff/ReceiveCar";
+
 
 // --- IMPORT CÁC TRANG ADMIN ---
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -130,6 +132,9 @@ function App() {
           {/* 8. báo cáo hư hại */}
           <Route path="incidents" element={<AdminIncidents />} />
         </Route>
+
+        {/* PAYMENT */}
+        <Route path="/payment/:id" element={<PaymentPage />} />
 
       </Routes>
 

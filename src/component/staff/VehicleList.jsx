@@ -1,111 +1,188 @@
-import { useState } from "react";
-import { MapPin, BatteryCharging } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Car, Search, Loader2, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
+import { getAllVehiclesApi } from "../../api/vehicleApi";
 
-const vehicles = [
-  { id: 1, name: "Toyota Camry", plate: "ABC-123", battery: 85, location: "Quận 1" },
-  { id: 2, name: "VinFast VF8", plate: "VF-888", battery: 42, location: "Quận 7" },
-  { id: 3, name: "Honda Civic", plate: "XYZ-789", battery: 18, location: "Sân bay" },
-  { id: 4, name: "Kia Morning", plate: "KM-456", battery: 67, location: "Quận 1" },
-];
+const STATUS_STYLE = {
+  AVAILABLE:   "bg-blue-100 text-blue-600",
+  IN_USE:      "bg-green-100 text-green-600",
+  MAINTENANCE: "bg-red-100 text-red-500",
+  CHARGING:    "bg-yellow-100 text-yellow-600",
+};
 
-export default function VehicleList() {
-  const [batteryFilter, setBatteryFilter] = useState("all");
-  const [locationFilter, setLocationFilter] = useState("all");
+const STATUS_LABEL = {
+  AVAILABLE:   "Sẵn sàng",
+  IN_USE:      "Đang sử dụng",
+  MAINTENANCE: "Bảo trì",
+  CHARGING:    "Đang sạc",
+};
 
-  const batteryColor = (level) => {
-    if (level > 60) return "bg-green-500";
-    if (level > 30) return "bg-yellow-400";
-    return "bg-red-500";
+const VehicleList = () => {
+  const [vehicles, setVehicles]   = useState([]);
+  const [search, setSearch]       = useState("");
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState(null);
+  const [page, setPage]           = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+
+  
+  const fetchVehicles = async (currentPage = 0) => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const res = await getAllVehiclesApi({ page: currentPage, size: 10 });
+      console.log("VEHICLE RESPONSE:", res.data);
+     const data = res.data.data;
+
+const list  = data?.content ?? [];
+const total = data?.totalPages ?? 1;
+
+setVehicles(list);
+setTotalPages(total);
+console.log("DATA:", data);
+    } catch (err) {
+      setError(err?.response?.data?.message || "Không thể tải danh sách xe");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const locations = [...new Set(vehicles.map((v) => v.location))];
+  useEffect(() => {
+    fetchVehicles(page);
+  }, [page]);
 
-  const filteredVehicles = vehicles.filter((car) => {
-    const matchBattery =
-      batteryFilter === "all" ||
-      (batteryFilter === "high" && car.battery > 60) ||
-      (batteryFilter === "medium" && car.battery > 30 && car.battery <= 60) ||
-      (batteryFilter === "low" && car.battery <= 30);
-
-    const matchLocation =
-      locationFilter === "all" || car.location === locationFilter;
-
-    return matchBattery && matchLocation;
+  // Map field API → UI
+  const mapVehicle = (v) => ({
+    id:           v.id,
+    plateNumber:  v.plateNumber ?? "—",
+    vin:          v.vin ?? "—",
+    color:        v.color ?? "—",
+    year:         v.manufactureYear ?? "—",
+    status:       v.status ?? "—",
+    odometerKm:   v.odometerKm ?? 0,
+    isVirtual:    v.isVirtual ?? false,
+    modelId:      v.modelId ?? "—",
+    fleetHubId:   v.fleetHubId ?? "—",
   });
+
+  const filteredVehicles = vehicles
+    .map(mapVehicle)
+    .filter((v) =>
+      v.plateNumber.toLowerCase().includes(search.toLowerCase()) ||
+      v.vin.toLowerCase().includes(search.toLowerCase()) ||
+      v.color.toLowerCase().includes(search.toLowerCase())
+    );
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-3 text-gray-500">
+        <Loader2 className="animate-spin" size={32} />
+        <p>Đang tải danh sách xe...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-3 text-red-500">
+        <AlertCircle size={32} />
+        <p>{error}</p>
+        <button
+          onClick={() => fetchVehicles(page)}
+          className="mt-2 px-4 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition"
+        >
+          Thử lại
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Danh sách xe</h1>
+      <h1 className="text-3xl font-bold text-gray-900">Danh sách xe</h1>
 
-      {/* FILTER BAR */}
-      <div className="flex flex-wrap gap-4 bg-white p-4 rounded-xl border shadow-sm">
-        {/* Battery filter */}
-        <div>
-          <p className="text-sm text-gray-500 mb-1">Mức pin</p>
-          <select
-            className="border rounded-lg px-3 py-2 text-sm"
-            value={batteryFilter}
-            onChange={(e) => setBatteryFilter(e.target.value)}
-          >
-            <option value="all">Tất cả</option>
-            <option value="high">Pin cao (&gt;60%)</option>
-            <option value="medium">Pin trung bình (30–60%)</option>
-            <option value="low">Pin thấp (&le;30%)</option>
-          </select>
-        </div>
-
-        {/* Location filter */}
-        <div>
-          <p className="text-sm text-gray-500 mb-1">Địa điểm</p>
-          <select
-            className="border rounded-lg px-3 py-2 text-sm"
-            value={locationFilter}
-            onChange={(e) => setLocationFilter(e.target.value)}
-          >
-            <option value="all">Tất cả</option>
-            {locations.map((loc, i) => (
-              <option key={i} value={loc}>
-                {loc}
-              </option>
-            ))}
-          </select>
-        </div>
+      {/* SEARCH BAR */}
+      <div className="relative w-full md:w-1/3">
+        <Search className="absolute left-3 top-3 text-gray-400" size={18} />
+        <input
+          type="text"
+          placeholder="Tìm theo biển số, VIN, màu xe..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full pl-10 pr-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
       </div>
 
-      {/* VEHICLE LIST */}
-      {filteredVehicles.map((car) => (
-        <div
-          key={car.id}
-          className="bg-white border rounded-2xl p-6 shadow-sm hover:shadow-md transition"
-        >
-          <div className="flex justify-between">
+      {/* LIST */}
+      {filteredVehicles.map((vehicle) => (
+        <div key={vehicle.id} className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+          <div className="flex justify-between items-start">
             <div>
-              <h2 className="text-xl font-semibold">{car.name}</h2>
-              <p className="text-gray-500">{car.plate}</p>
+              <h2 className="text-xl font-semibold">{vehicle.plateNumber}</h2>
+              <p className="text-gray-500 text-sm">VIN: {vehicle.vin}</p>
             </div>
-            <div className="flex items-center gap-2 font-medium">
-              <BatteryCharging size={18} />
-              {car.battery}%
+            <span className={`px-4 py-1 text-sm rounded-full font-medium ${STATUS_STYLE[vehicle.status] ?? "bg-gray-100 text-gray-500"}`}>
+              {STATUS_LABEL[vehicle.status] ?? vehicle.status}
+            </span>
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+              <p className="text-gray-400 text-xs">Màu xe</p>
+              <p className="font-medium">{vehicle.color}</p>
+            </div>
+            <div>
+              <p className="text-gray-400 text-xs">Năm SX</p>
+              <p className="font-medium">{vehicle.year}</p>
+            </div>
+            <div>
+              <p className="text-gray-400 text-xs">Số km</p>
+              <p className="font-medium flex items-center gap-1">
+                <Car size={14} /> {vehicle.odometerKm.toLocaleString()} km
+              </p>
+            </div>
+            <div>
+              <p className="text-gray-400 text-xs">Hub ID</p>
+              <p className="font-medium">{vehicle.fleetHubId}</p>
             </div>
           </div>
 
-          <div className="mt-4 space-y-3">
-            <div>
-              <div className="w-full bg-gray-200 rounded-full h-3">
-                <div
-                  className={`h-3 rounded-full ${batteryColor(car.battery)}`}
-                  style={{ width: `${car.battery}%` }}
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 text-gray-600 text-sm">
-              <MapPin size={16} />
-              {car.location}
-            </div>
-          </div>
+          {vehicle.isVirtual && (
+            <span className="mt-3 inline-block px-3 py-1 text-xs bg-purple-100 text-purple-600 rounded-full">
+              Xe ảo
+            </span>
+          )}
         </div>
       ))}
+
+      {filteredVehicles.length === 0 && (
+        <p className="text-gray-500 text-center">Không tìm thấy xe phù hợp</p>
+      )}
+
+      {/* PAGINATION */}
+      {totalPages > 1 && (
+        <div className="flex justify-center items-center gap-4 pt-4">
+          <button
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+            disabled={page === 0}
+            className="p-2 rounded-lg border hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <ChevronLeft size={18} />
+          </button>
+          <span className="text-sm text-gray-600">
+            Trang {page + 1} / {totalPages}
+          </span>
+          <button
+            onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+            disabled={page === totalPages - 1}
+            className="p-2 rounded-lg border hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <ChevronRight size={18} />
+          </button>
+        </div>
+      )}
     </div>
   );
-}
+};
+
+export default VehicleList;
