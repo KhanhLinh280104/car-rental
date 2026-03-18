@@ -2,13 +2,14 @@ import { useState, useEffect, useCallback } from "react";
 import {
   Car, MapPin, Calendar, Clock, ChevronRight, ChevronLeft,
   Loader2, AlertTriangle, CheckCircle, XCircle, RefreshCw,
-  History, Plus, X, User,
+  History, Plus, X, User, CreditCard,
 } from "lucide-react";
 import { getAllVehiclesApi } from "../../api/vehicleApi";
 import {
   createBookingApi,
   getBookingsByUserApi,
   cancelBookingApi,
+  processPaymentApi,
 } from "../../api/bookingApi";
 import { useNotification } from "../../context/NotificationContext";
 
@@ -62,11 +63,127 @@ function VehicleCard({ vehicle, selected, onSelect }) {
   );
 }
 
+// ─── Payment method options ────────────────────────────────────────────────
+const PAY_METHODS = [
+  { value: "CASH",          label: "💵 Tiền mặt" },
+  { value: "E_WALLET",      label: "📱 Ví điện tử (Momo / ZaloPay)" },
+  { value: "BANK_TRANSFER", label: "🏦 Chuyển khoản ngân hàng" },
+  { value: "CREDIT_CARD",   label: "💳 Thẻ tín dụng" },
+];
+
+// ─── Inline Payment Modal ──────────────────────────────────────────────────
+function PaymentModal({ booking, invoice, onClose, onPaid }) {
+  const [method, setMethod] = useState("CASH");
+  const [paying, setPaying] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const handlePay = async () => {
+    setPaying(true);
+    setErr(null);
+    try {
+      const res = await processPaymentApi(invoice.id, method, invoice.amount);
+      const result = res.data?.data;
+      if (result?.status === "PAID") {
+        onPaid();
+      } else {
+        setErr(result?.message || "Thanh toán không thành công.");
+      }
+    } catch (e) {
+      setErr(e.response?.data?.message || "Thanh toán thất bại.");
+    } finally {
+      setPaying(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50" onClick={() => !paying && onClose()} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-5 animate-fade-in-up">
+        {/* Header */}
+        <div className="flex justify-between items-center">
+          <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+            <CreditCard size={20} className="text-blue-500" />
+            Thanh toán đặt xe
+          </h3>
+          {!paying && (
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition">
+              <X size={20} />
+            </button>
+          )}
+        </div>
+
+        {/* Invoice info */}
+        <div className="bg-green-50 border border-green-200 rounded-xl p-4 space-y-2 text-sm">
+          <div className="flex justify-between">
+            <span className="text-gray-500">Mã booking</span>
+            <span className="font-mono font-semibold text-green-700">{booking.bookingCode}</span>
+          </div>
+          <div className="flex justify-between border-t border-green-100 pt-2 mt-1">
+            <span className="font-semibold text-gray-700">Số tiền cần thanh toán</span>
+            <span className="text-xl font-bold text-green-600">{fmtMoney(invoice.amount)}</span>
+          </div>
+        </div>
+
+        {/* Method selector */}
+        <div className="space-y-2">
+          <p className="text-sm font-semibold text-gray-700">Chọn phương thức thanh toán</p>
+          {PAY_METHODS.map((m) => (
+            <label
+              key={m.value}
+              className={`flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition ${
+                method === m.value
+                  ? "border-green-400 bg-green-50"
+                  : "border-gray-200 hover:border-gray-300"
+              }`}
+            >
+              <input
+                type="radio"
+                name="payMethod"
+                value={m.value}
+                checked={method === m.value}
+                onChange={() => setMethod(m.value)}
+                className="accent-green-500"
+              />
+              <span className="text-sm font-medium text-gray-700">{m.label}</span>
+            </label>
+          ))}
+        </div>
+
+        {err && (
+          <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            {err}
+          </p>
+        )}
+
+        {/* Actions */}
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            disabled={paying}
+            className="flex-1 py-3 border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 transition font-medium disabled:opacity-40"
+          >
+            Thanh toán sau
+          </button>
+          <button
+            onClick={handlePay}
+            disabled={paying}
+            className="flex-1 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition font-semibold flex items-center justify-center gap-2 disabled:opacity-60 shadow-sm"
+          >
+            {paying ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />}
+            {paying ? "Đang xử lý..." : "Xác nhận thanh toán"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Booking History Card ──────────────────────────────────────────────────
-function HistoryCard({ booking, onCancelled }) {
+function HistoryCard({ booking, onCancelled, onPaymentDone }) {
   const [cancelling, setCancelling] = useState(false);
   const [cancelInput, setCancelInput] = useState(false);
   const [reason, setReason] = useState("");
+  const [showPayModal, setShowPayModal] = useState(false);
   const statusCfg = STATUS_CONFIG[booking.status] || STATUS_CONFIG.PENDING;
 
   const handleCancel = async () => {
@@ -84,6 +201,11 @@ function HistoryCard({ booking, onCancelled }) {
 
   const canCancel = booking.status === "PENDING" || booking.status === "CONFIRMED";
   const units = booking.rentalUnits || [];
+
+  // Invoice logic
+  const unpaidInvoice = booking.invoices?.find((inv) => inv.status === "UNPAID");
+  const paidInvoice   = booking.invoices?.find((inv) => inv.status === "PAID");
+  const canPay = unpaidInvoice && booking.status !== "CANCELLED";
 
   return (
     <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
@@ -147,6 +269,29 @@ function HistoryCard({ booking, onCancelled }) {
         <p className="text-xs text-gray-400">Đặt lúc: {fmtDate(booking.createdAt)}</p>
       </div>
 
+      {/* Payment status row */}
+      {(paidInvoice || unpaidInvoice) && (
+        <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between">
+          {paidInvoice ? (
+            <span className="flex items-center gap-1.5 text-green-600 text-sm font-medium">
+              <CheckCircle size={15} /> Đã thanh toán {fmtMoney(paidInvoice.amount)}
+            </span>
+          ) : (
+            <span className="flex items-center gap-1.5 text-orange-500 text-sm font-medium">
+              <AlertTriangle size={15} /> Chưa thanh toán {fmtMoney(unpaidInvoice.amount)}
+            </span>
+          )}
+          {canPay && (
+            <button
+              onClick={() => setShowPayModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-semibold hover:bg-green-700 transition"
+            >
+              <CreditCard size={13} /> Thanh toán
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Cancel */}
       {canCancel && (
         <div className="px-5 py-3 border-t border-gray-100">
@@ -185,6 +330,113 @@ function HistoryCard({ booking, onCancelled }) {
           )}
         </div>
       )}
+
+      {/* Payment modal */}
+      {showPayModal && unpaidInvoice && (
+        <PaymentModal
+          booking={booking}
+          invoice={unpaidInvoice}
+          onClose={() => setShowPayModal(false)}
+          onPaid={() => {
+            setShowPayModal(false);
+            onPaymentDone();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Inline Payment Form (after booking created, embedded in page) ─────────
+function PaymentInlineForm({ booking, invoice, onClose, onPaid }) {
+  const { notifySuccess, notifyError } = useNotification();
+  const [method, setMethod] = useState("CASH");
+  const [paying, setPaying] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const handlePay = async () => {
+    setPaying(true);
+    setErr(null);
+    try {
+      const res = await processPaymentApi(invoice.id, method, invoice.amount);
+      const result = res.data?.data;
+      if (result?.status === "PAID") {
+        notifySuccess("✅ Thanh toán thành công! Đơn đặt xe đang chờ Staff xác nhận.");
+        onPaid();
+      } else {
+        setErr(result?.message || "Thanh toán không thành công.");
+      }
+    } catch (e) {
+      const msg = e.response?.data?.message || "Thanh toán thất bại. Vui lòng thử lại.";
+      setErr(msg);
+      notifyError(msg);
+    } finally {
+      setPaying(false);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 space-y-5">
+      <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+        <CreditCard size={20} className="text-green-500" /> Thanh toán đặt xe
+      </h3>
+
+      {/* Invoice summary */}
+      <div className="bg-green-50 border border-green-200 rounded-xl p-4 space-y-2 text-sm">
+        <div className="flex justify-between">
+          <span className="text-gray-500">Mã booking</span>
+          <span className="font-mono font-semibold text-green-700">{booking.bookingCode}</span>
+        </div>
+        <div className="flex justify-between border-t border-green-100 pt-2 mt-1">
+          <span className="font-semibold text-gray-700">Số tiền</span>
+          <span className="text-xl font-bold text-green-600">{fmtMoney(invoice.amount)}</span>
+        </div>
+      </div>
+
+      {/* Method selector */}
+      <div className="space-y-2">
+        <p className="text-sm font-semibold text-gray-700">Chọn phương thức thanh toán</p>
+        {PAY_METHODS.map((m) => (
+          <label
+            key={m.value}
+            className={`flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition ${
+              method === m.value ? "border-green-400 bg-green-50" : "border-gray-200 hover:border-gray-300"
+            }`}
+          >
+            <input
+              type="radio"
+              name="inlinePayMethod"
+              value={m.value}
+              checked={method === m.value}
+              onChange={() => setMethod(m.value)}
+              className="accent-green-500"
+            />
+            <span className="text-sm font-medium text-gray-700">{m.label}</span>
+          </label>
+        ))}
+      </div>
+
+      {err && (
+        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{err}</p>
+      )}
+
+      <div className="flex gap-3">
+        <button
+          onClick={onClose}
+          disabled={paying}
+          className="flex-1 py-3 border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 transition font-medium disabled:opacity-40 text-sm"
+        >
+          Thanh toán sau
+        </button>
+        <button
+          onClick={handlePay}
+          disabled={paying}
+          className="flex-1 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition font-semibold flex items-center justify-center gap-2 disabled:opacity-60 shadow-sm text-sm"
+        >
+          {paying ? <Loader2 size={16} className="animate-spin" /> : <CreditCard size={16} />}
+          {paying ? "Đang xử lý..." : "Xác nhận thanh toán"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -197,6 +449,9 @@ function CreateBookingForm({ onCreated }) {
   const [loadingVehicles, setLoadingVehicles] = useState(true);
   const [selectedVehicle, setSelectedVehicle] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Payment step after booking creation
+  const [pendingPayment, setPendingPayment] = useState(null); // { booking, invoice }
 
   const [form, setForm] = useState({
     deliveryMode: "SELF_PICKUP",
@@ -260,11 +515,21 @@ function CreateBookingForm({ onCreated }) {
           },
         ],
       };
-      await createBookingApi(payload);
-      notifySuccess("🎉 Đặt xe thành công! Đơn đang chờ Staff xác nhận.");
+      const res = await createBookingApi(payload);
+      const newBooking = res.data?.data;
+
+      // Reset form
       setSelectedVehicle(null);
       setForm({ deliveryMode: "SELF_PICKUP", deliveryAddress: "", isWithDriver: false, startTime: "", endTime: "", unitPrice: "" });
-      onCreated();
+
+      // Kiểm tra có invoice chưa thanh toán không → hiện modal thanh toán ngay
+      const unpaidInvoice = newBooking?.invoices?.find((inv) => inv.status === "UNPAID");
+      if (unpaidInvoice && newBooking) {
+        setPendingPayment({ booking: newBooking, invoice: unpaidInvoice });
+      } else {
+        notifySuccess("🎉 Đặt xe thành công! Đơn đang chờ Staff xác nhận.");
+        onCreated();
+      }
     } catch (err) {
       notifyError(err.response?.data?.message || "Đặt xe thất bại. Vui lòng thử lại.");
     } finally {
@@ -273,6 +538,30 @@ function CreateBookingForm({ onCreated }) {
   };
 
   const availableVehicles = vehicles.filter((v) => v.status === "AVAILABLE");
+
+  // Render payment modal after booking created
+  if (pendingPayment) {
+    return (
+      <div className="space-y-4">
+        <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 flex items-center gap-3">
+          <CheckCircle size={20} className="text-green-500 flex-shrink-0" />
+          <div>
+            <p className="font-semibold text-green-800 text-sm">Đặt xe thành công!</p>
+            <p className="text-xs text-green-600 mt-0.5">
+              Mã booking: <span className="font-mono font-bold">{pendingPayment.booking.bookingCode}</span>
+            </p>
+          </div>
+        </div>
+
+        <PaymentInlineForm
+          booking={pendingPayment.booking}
+          invoice={pendingPayment.invoice}
+          onClose={() => { setPendingPayment(null); onCreated(); }}
+          onPaid={() => { setPendingPayment(null); onCreated(); }}
+        />
+      </div>
+    );
+  }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -569,6 +858,7 @@ export default function UserBooking() {
                       key={b.id}
                       booking={b}
                       onCancelled={() => fetchHistory()}
+                      onPaymentDone={() => fetchHistory()}
                     />
                   ))}
                 </div>

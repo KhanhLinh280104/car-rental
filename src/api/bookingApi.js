@@ -194,3 +194,16 @@ export const getDriverBookingsApi = (driverId, status = null, page = 0, size = 2
     if (status) params.status = status;
     return axiosClient.get(`/drivers/${driverId}/bookings`, { params });
 };
+
+// ============================================================
+// PAYMENT
+// ============================================================
+
+/**
+ * Xử lý thanh toán cho một hóa đơn
+ * @param {number} invoiceId   - ID của Invoice cần thanh toán
+ * @param {string} paymentMethodType - "CASH" | "E_WALLET" | "BANK_TRANSFER" | "CREDIT_CARD"
+ * @param {number} amount      - Số tiền (phải khớp với invoice.amount)
+ */
+export const processPaymentApi = (invoiceId, paymentMethodType, amount) =>
+    axiosClient.post('/payments/process', { invoiceId, paymentMethodType, amount });
