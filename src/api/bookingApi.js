@@ -181,6 +181,15 @@ export const staffHandoverStartApi = (id) => {
   return axiosClient.patch(`/bookings/${id}/staff-handover-start`);
 };
 
-export const staffHandoverReturnApi = (id) => {
-  return axiosClient.patch(`/bookings/${id}/staff-handover-return`);
-};
+// ============================================================
+// PAYMENT
+// ============================================================
+
+/**
+ * Xử lý thanh toán cho một hóa đơn
+ * @param {number} invoiceId   - ID của Invoice cần thanh toán
+ * @param {string} paymentMethodType - "CASH" | "E_WALLET" | "BANK_TRANSFER" | "CREDIT_CARD"
+ * @param {number} amount      - Số tiền (phải khớp với invoice.amount)
+ */
+export const processPaymentApi = (invoiceId, paymentMethodType, amount) =>
+    axiosClient.post('/payments/process', { invoiceId, paymentMethodType, amount });
