@@ -92,17 +92,37 @@ export const confirmBookingApi = (id) =>
     axiosClient.patch(`/bookings/${id}/confirm`);
 
 /**
- * [STAFF] Bàn giao xe cho khách (không có tài xế) → IN_PROGRESS
+ * [STAFF] Scan ảnh xe & phân tích AI trước bàn giao (PICKUP preview)
  * @param {number} id
- * @param {Object} handoverData — { rentalUnitId, type:"PICKUP", odoMeter, condition, photos }
+ * @param {Object} scanData — { rentalUnitId, vehiclePhotos: [{corner, imageUrl}, ...] }
+ * @returns AI analysis: inspectionAnalysisId, analysisStatus, inspectionAnalysis, comparison (null for PICKUP)
+ */
+export const staffHandoverStartPreviewApi = (id, scanData) =>
+    axiosClient.post(`/bookings/${id}/staff-handover-start-preview`, scanData);
+
+/**
+ * [STAFF] Bàn giao xe cho khách (không có tài xế) → IN_PROGRESS
+ * ⚠️ Không gửi ảnh — chỉ ghi biên bản (type, odoMeter, condition, inspectionAnalysisId)
+ * @param {number} id
+ * @param {Object} handoverData — { rentalUnitId, type:"PICKUP", odoMeter, condition, inspectionAnalysisId }
  */
 export const staffHandoverStartApi = (id, handoverData) =>
     axiosClient.patch(`/bookings/${id}/staff-handover-start`, handoverData);
 
 /**
- * [STAFF] Nhận xe lại từ khách (không có tài xế) → COMPLETED
+ * [STAFF] Scan ảnh xe & phân tích AI trước nhận xe (RETURN preview)
  * @param {number} id
- * @param {Object} handoverData — { rentalUnitId, type:"RETURN", odoMeter, condition, photos }
+ * @param {Object} scanData — { rentalUnitId, vehiclePhotos: [{corner, imageUrl}, ...] }
+ * @returns AI analysis: inspectionAnalysisId, analysisStatus, inspectionAnalysis, comparison (with damageChanges)
+ */
+export const staffHandoverReturnPreviewApi = (id, scanData) =>
+    axiosClient.post(`/bookings/${id}/staff-handover-return-preview`, scanData);
+
+/**
+ * [STAFF] Nhận xe lại từ khách (không có tài xế) → COMPLETED
+ * ⚠️ Không gửi ảnh — chỉ ghi biên bản (type, odoMeter, condition, inspectionAnalysisId, finalIncurredFee)
+ * @param {number} id
+ * @param {Object} handoverData — { rentalUnitId, type:"RETURN", odoMeter, condition, inspectionAnalysisId, finalIncurredFee }
  */
 export const staffHandoverReturnApi = (id, handoverData) =>
     axiosClient.patch(`/bookings/${id}/staff-handover-return`, handoverData);
