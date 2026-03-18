@@ -1,6 +1,8 @@
 import { Phone, User, Menu } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
-const Header = ({openLogin}) => {
+const Header = ({ openLogin }) => {
+  const navigate = useNavigate();
 
   const scrollToTop = () => {
     window.scrollTo({
@@ -38,11 +40,27 @@ const Header = ({openLogin}) => {
               <span className="font-semibold">1900 9999</span>
             </div>
 
-            <button onClick={openLogin}
-            className="flex items-center space-x-2 px-4 py-2 text-black rounded-lg hover:bg-green-600 transition">
-              <User className="w-5 h-5" />
-              <span>Đăng nhập</span>
-            </button>
+            {localStorage.getItem("token") ? (
+              <div
+                onClick={() => {
+                  const role = localStorage.getItem("role");
+                  if (role === "ADMIN") navigate("/admin");
+                  else if (role === "STAFF") navigate("/staff");
+                  else if (role === "DRIVER") navigate("/driver");
+                  else navigate("/user");
+                }}
+                className="flex items-center space-x-2 px-4 py-2 text-black font-medium border rounded-lg border-green-600 cursor-pointer hover:bg-green-50 transition"
+              >
+                <User className="w-5 h-5 text-green-600" />
+                <span>Xin chào!</span>
+              </div>
+            ) : (
+              <button onClick={openLogin}
+                className="flex items-center space-x-2 px-4 py-2 text-black rounded-lg hover:bg-green-600 transition">
+                <User className="w-5 h-5" />
+                <span>Đăng nhập</span>
+              </button>
+            )}
           </div>
 
           <button className="md:hidden">
@@ -56,4 +74,3 @@ const Header = ({openLogin}) => {
 };
 
 export default Header;
-  

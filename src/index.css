@@ -1,1 +1,20 @@
 @import "tailwindcss";
+
+/* Remove unnecessary horizontal scrollbar */
+html, body {
+  overflow-x: hidden;
+}
+
+/* Ensure body takes full height */
+html {
+  height: 100%;
+}
+
+body {
+  min-height: 100%;
+}
+
+/* Smooth scrolling */
+* {
+  scroll-behavior: smooth;
+}

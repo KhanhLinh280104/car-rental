@@ -1,121 +1,152 @@
-import { useState, cloneElement } from "react";
+import { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { User, Lock, Trash2, LogOut, Home, Users, FileText } from "lucide-react";
-import LogoutModal from "./LogoutModal";
+import {
+  User,
+  Lock,
+  Trash2,
+  LogOut,
+  Home,
+  Users,
+  FileText,
+  BarChart3,
+  Car,
+  Settings,
+  Map,
+  AlertTriangle,
+  IdCard,
+  DollarSign,
+  Star,
+  Book,
+  ClipboardCheck
+} from "lucide-react";
 
-export default function Sidebar({ role = "guest", active = "", sidebarType = "role" }) {
+import LogoutModal from "./LogoutModal";
+import { logoutApi } from "../api/authApi";
+
+export default function Sidebar({ role = "user" }) {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
-  const handleLogout = () => {
-    setShowLogoutModal(false);
-    navigate("/");
+  const handleLogout = async () => {
+    try {
+      const refreshToken = localStorage.getItem("refreshToken");
+      if (refreshToken) {
+        await logoutApi(refreshToken);
+      }
+    } catch (error) {
+      console.error("Logout failed:", error);
+    } finally {
+      localStorage.clear(); // Clear all tokens
+      setShowLogoutModal(false);
+      navigate("/");
+      window.location.reload();
+    }
   };
 
   const menus = {
-    guest: [
-      { to: "/", label: "Trang chủ", icon: <Home size={18} /> },
-      { to: "/user", label: "Thông tin cá nhân", icon: <User size={18} /> },
-      {to: "/user/change-password", label: "Đổi mật khẩu", icon: <User size={18} /> },
-      {to: "/user/delete-password", label: "Xóa tài khoản", icon: <Trash2 size={18} /> },
-    ],
     user: [
       { id: 'home', to: "/", label: "Trang chủ", icon: <Home size={18} /> },
-      { id: 'bookings', to: "/bookings", label: "Đơn đặt", icon: <FileText size={18} /> },
-      { id: 'account', to: "/user", label: "Tài khoản của tôi", icon: <User size={18} /> },
+      { id: 'profile', to: "/user", label: "Thông tin cá nhân", icon: <User size={18} /> },
+      { id: 'booking', to: "/user/booking", label: "Đặt xe", icon: <Book size={18} /> },
       { id: 'password', to: "/user/change-password", label: "Đổi mật khẩu", icon: <Lock size={18} /> },
-      { id: 'delete', to: "/user/delete-account", label: "Yêu cầu xoá tài khoản", icon: <Trash2 size={18} /> },
+      { id: 'delete', to: "/user/delete-account", label: "Xóa tài khoản", icon: <Trash2 size={18} /> },
+    ],
+    staff: [
+      { id: 'home', to: "/staff", label: "Trang chủ", icon: <Home size={18} /> },
+      { id: 'bookings', to: "/staff/booking", label: "Đơn đặt", icon: <FileText size={18} /> },
+      { id: 'receive', to: "/staff/receive-car", label: "Nhận và kiểm tra xe", icon: <ClipboardCheck size={18} /> },
+      { id: 'drivers', to: "/staff/driver-list", label: "Danh sách tài xế", icon: <IdCard size={18} /> },
+      { id: 'vehicles', to: "/staff/vehicle-list", label: "Danh sách xe", icon: <Car size={18} /> },
     ],
     admin: [
-      { to: "/", label: "Trang chủ", icon: <Home size={18} /> },
-      { to: "/admin", label: "Quản trị", icon: <Users size={18} /> },
-      { to: "/manage/users", label: "Người dùng", icon: <Users size={18} /> },
-      { to: "/user", label: "Hồ sơ", icon: <User size={18} /> },
+      { id: 'dashboard', to: "/admin", label: "Dashboard", icon: <BarChart3 size={18} /> },
+      { id: 'fleet', to: "/admin/fleet", label: "Quản lý đội xe", icon: <Car size={18} /> },
+      { id: 'users', to: "/admin/users", label: "Quản lý người dùng", icon: <Users size={18} /> },
+      { id: 'drivers', to: "/admin/drivers", label: "Quản lý tài xế", icon: <User size={18} /> },
+      { id: 'bookings', to: "/admin/bookings", label: "Quản lý đặt xe", icon: <FileText size={18} /> },
+      { id: 'tracking', to: "/admin/tracking", label: "Bản đồ GPS", icon: <Map size={18} /> },
+      { id: 'incidents', to: "/admin/incidents", label: "Sự cố & Hư hại", icon: <AlertTriangle size={18} /> },
+      { id: 'settings', to: "/admin/settings", label: "Cấu hình hệ thống", icon: <Settings size={18} /> },
+    ],
+    driver: [
+      { id: 'trip', to: "/driver", label: "Chuyến đi", icon: <Car size={18} /> },
+      { id: 'dashboard', to: "/driver/dashboard", label: "Dashboard cá nhân", icon: <Star size={18} /> },
+      { id: 'report', to: "/driver/report", label: "Báo cáo", icon: <AlertTriangle size={18} /> },
+      { id: 'profile', to: "/driver/profile", label: "Thông tin cá nhân", icon: <User size={18} /> },
+      { id: 'history', to: "/driver/history", label: "Lịch sử", icon: <FileText size={18} /> },
     ],
   };
 
-  const items = menus[role] || menus.guest;
+  const items = menus[role] || menus.user;
+  const currentPath = location.pathname;
 
-  // derive whether to use the user-style sidebar: explicit prop, role, or path
-  const renderUserStyle = sidebarType === "user" || role === "user" || location.pathname.startsWith('/user');
+  // Tìm item nào có đường dẫn khớp với URL hiện tại
+  const sortedItems = [...items].sort((a, b) => b.to.length - a.to.length);
 
-  // derive active item from prop or from pathname for user pages
-  let derivedActive = active;
-  if (!derivedActive) {
-    const p = location.pathname;
-    if (p.startsWith('/user/change-password')) derivedActive = 'password';
-    else if (p.startsWith('/user/delete-account')) derivedActive = 'delete';
-    else if (p.startsWith('/user')) derivedActive = 'account';
-    else if (p.startsWith('/bookings')) derivedActive = 'bookings';
-    else if (p === '/' || p === '') derivedActive = 'home';
-  }
+  const activeItem = sortedItems.find(item => {
+    if (item.to === '/') {
+      return currentPath === '/';
+    }
+    return currentPath === item.to || currentPath.startsWith(item.to + '/');
+  });
 
-  if (renderUserStyle) {
-    return (
-      <div className="w-full lg:w-1/4 mb-6 lg:mb-0">
-        <h2 className="text-2xl font-bold mb-6 text-gray-800">Xin chào bạn!</h2>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="flex flex-col">
-            {items.map((item) => (
-              <Link
-                key={item.id || item.to}
-                to={item.to}
-                className={`flex items-center space-x-3 px-6 py-4 transform transition-all duration-200 ease-in-out 
-                  ${derivedActive === item.id
-                    ? 'border-l-4 border-green-500 text-green-600 bg-green-50' 
-                    : 'text-gray-600 border-l-4 border-transparent hover:border-green-500 hover:bg-green-50 hover:text-green-600'
-                  }`}
-              >
-                <span>{item.icon}</span>
-                <span className="font-medium">{item.label}</span>
-              </Link>
-            ))}
+  // 👇 SỬA Ở ĐÂY: Xử lý highlight linh hoạt
+  let derivedActive = activeItem ? activeItem.id : '';
 
-            <button
-              onClick={() => setShowLogoutModal(true)}
-              className="flex items-center space-x-3 px-6 py-4 text-red-500 hover:bg-red-50 mt-2 border-t border-gray-100 transition-colors w-full text-left"
-            >
-              <LogOut size={20} />
-              <span className="font-medium">Đăng xuất</span>
-            </button>
-          </div>
-        </div>
-
-        <LogoutModal
-          isOpen={showLogoutModal}
-          onClose={() => setShowLogoutModal(false)}
-          onConfirm={handleLogout}
-        />
-      </div>
-    );
+  if (role === 'staff') {
+    // Ép sáng nút Đơn đặt nếu đang ở trang giao xe (check-in)
+    if (currentPath.includes('/staff/handover')) {
+      derivedActive = 'bookings'; 
+    }
+    // Ép sáng nút Nhận và kiểm tra xe nếu đang ở trang chi tiết nhận xe
+    if (currentPath.includes('/staff/receive-car')) {
+      derivedActive = 'receive'; 
+    }
+    // Ép sáng nút Trang chủ nếu đang ở đúng gốc /staff
+    if (currentPath === '/staff' || currentPath === '/staff/') {
+      derivedActive = 'home';
+    }
   }
 
   return (
-    <aside className="w-64 bg-white border-r hidden md:block">
-      <div className="p-4">
-        <h4 className="font-semibold mb-4">Menu</h4>
-        <nav className="flex flex-col space-y-1">
+    <div className="w-full lg:w-1/4 mb-6 lg:mb-0">
+      <h2 className="text-2xl font-bold mb-6 text-gray-800">
+        {role === 'admin' ? 'Quản trị viên' : role === 'staff' ? 'Nhân viên' : role === 'driver' ? 'Tài xế' : 'Xin chào bạn!'}
+      </h2>
+
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="flex flex-col">
           {items.map((item) => (
             <Link
-              key={item.id || item.to}
+              key={item.id}
               to={item.to}
-              className={`group flex items-center space-x-3 px-4 py-3 transition-colors duration-200 transform ${
-                derivedActive === item.id
+              className={`flex items-center space-x-3 px-6 py-4 transition-colors w-full text-left
+                ${derivedActive === item.id
                   ? 'border-l-4 border-green-500 text-green-600 bg-green-50'
-                  : 'text-gray-700 hover:bg-gray-50 hover:text-green-600 border-l-4 border-transparent hover:translate-x-1'
-              }`}
+                  : 'text-gray-600 hover:bg-gray-50 border-l-4 border-transparent'
+                }`}
             >
-              <span className="flex-shrink-0">
-                {cloneElement(item.icon, {
-                  className: derivedActive === item.id ? 'text-green-600' : 'text-gray-400 group-hover:text-green-600',
-                })}
-              </span>
+              {item.icon}
               <span className="font-medium">{item.label}</span>
             </Link>
           ))}
-        </nav>
+
+          <button
+            onClick={() => setShowLogoutModal(true)}
+            className="flex items-center space-x-3 px-6 py-4 text-red-500 hover:bg-red-50 mt-2 border-t border-gray-100 w-full text-left transition-colors"
+          >
+            <LogOut size={20} />
+            <span className="font-medium">Đăng xuất</span>
+          </button>
+        </div>
       </div>
-    </aside>
+
+      <LogoutModal
+        isOpen={showLogoutModal}
+        onClose={() => setShowLogoutModal(false)}
+        onConfirm={handleLogout}
+      />
+    </div>
   );
 }
