@@ -30,6 +30,7 @@ const HandoverCar = () => {
   const [booking, setBooking] = useState(null);
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [apiError, setApiError] = useState(null);
 
@@ -69,35 +70,51 @@ const HandoverCar = () => {
   const [inspectionResults, setInspectionResults] = useState({});
 
   // ── Fetch booking from real API ──────────────────────────────────────────
+  const [notes, setNotes]     = useState("");
+
   useEffect(() => {
-    setLoading(true);
-    getBookingByIdApi(bookingId)
-      .then((res) => {
-        const data = res.data?.data;
-        if (!data) throw new Error('Không tìm thấy booking');
-        setBooking(data);
-      })
-      .catch(() => setBooking(null))
-      .finally(() => setLoading(false));
-  }, [bookingId]);
+    const fetchState = async () => {
+      try {
+        setLoading(true);
+        const res = await getVehicleStateApi(vehicleId);
+        console.log("VEHICLE STATE:", res.data);
+        const data = res.data?.data ?? res.data;
+        setState(data);
+      } catch (err) {
+        setError("Không thể tải trạng thái xe");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchState();
+  }, [vehicleId]);
+
+  const handleReceive = async () => {
+    try {
+      setSubmitting(true);
+      await staffHandoverReturnApi(bookingId);
+      onSuccess?.();
+    } catch (err) {
+      setError(err?.response?.data?.message || "Nhận xe thất bại");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 gap-3">
-        <Loader2 className="animate-spin text-blue-500" size={36} />
-        <p className="text-gray-500">Đang tải thông tin đơn...</p>
+      <div className="flex flex-col items-center justify-center py-10 gap-3 text-gray-500">
+        <Loader2 className="animate-spin" size={28} />
+        <p>Đang tải trạng thái xe...</p>
       </div>
     );
   }
 
-  if (!booking) {
+  if (error) {
     return (
-      <div className="max-w-xl mx-auto text-center py-20 space-y-4">
-        <AlertTriangle size={40} className="text-red-400 mx-auto" />
-        <p className="text-gray-500 text-lg">Không tìm thấy đơn đặt xe #{bookingId}</p>
-        <button onClick={() => navigate('/staff/booking')} className="text-blue-600 underline">
-          Quay lại danh sách
-        </button>
+      <div className="flex flex-col items-center justify-center py-10 gap-3 text-red-500">
+        <AlertCircle size={28} />
+        <p>{error}</p>
       </div>
     );
   }
@@ -366,24 +383,22 @@ const HandoverCar = () => {
             <p className="font-medium text-gray-800">Đã kiểm tra CCCD / CMND</p>
             <p className="text-xs text-gray-500">Đối chiếu ảnh và thông tin giấy tờ với khách hàng</p>
           </div>
-        </label>
 
-        <label className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-blue-50 transition">
-          <input type="checkbox" checked={licenseVerified} onChange={(e) => setLicenseVerified(e.target.checked)}
-            className="w-5 h-5 text-blue-600 rounded" />
-          <div>
-            <p className="font-medium text-gray-800">Đã kiểm tra Giấy phép lái xe</p>
-            <p className="text-xs text-gray-500">GPLX hạng B2 trở lên, còn hạn sử dụng</p>
+          {/* Speed */}
+          <div className="flex flex-col items-center bg-gray-50 rounded-xl p-4 gap-2">
+            <Gauge size={24} className="text-purple-500" />
+            <p className="text-xs text-gray-400">Tốc độ</p>
+            <p className="font-semibold text-lg">{state?.speedKmh ?? 0} km/h</p>
           </div>
-        </label>
 
-        <label className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-green-50 transition">
-          <input type="checkbox" checked={depositConfirmed} onChange={(e) => setDepositConfirmed(e.target.checked)}
-            className="w-5 h-5 text-green-600 rounded" />
-          <div>
-            <p className="font-medium text-gray-800">Đã xác nhận tiền cọc</p>
-            <p className="text-xs text-gray-500">
-              Số tiền cọc: {fmtMoney(booking.depositRequired)}
+          {/* GPS */}
+          <div className="flex flex-col items-center bg-gray-50 rounded-xl p-4 gap-2">
+            <MapPin size={24} className="text-red-500" />
+            <p className="text-xs text-gray-400">Vị trí</p>
+            <p className="font-medium text-sm text-center">
+              {state?.latitude && state?.longitude
+                ? `${state.latitude.toFixed(4)}, ${state.longitude.toFixed(4)}`
+                : "Không có"}
             </p>
           </div>
         </label>
@@ -713,138 +728,22 @@ const HandoverCar = () => {
 
   const stepRenderers = [renderStepVerify, renderStepVehicle, renderStepConfirm];
 
-  return (
-    <div className="max-w-4xl mx-auto space-y-6 pb-10">
-      {/* Header */}
-      <div className="flex items-center gap-4">
+      {/* ACTION */}
+      <div className="flex justify-end">
         <button
-          onClick={() => navigate('/staff/booking')}
-          className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-gray-600 transition"
+          onClick={handleReceive}
+          disabled={submitting}
+          className="px-6 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition font-medium flex items-center gap-2 disabled:opacity-50"
         >
-          <ArrowLeft size={20} />
+          {submitting
+            ? <><Loader2 size={18} className="animate-spin" /> Đang xử lý...</>
+            : <><CheckCircle2 size={18} /> Xác nhận nhận xe</>
+          }
         </button>
-        <div>
-          <h2 className="text-2xl font-bold text-gray-800">Bàn Giao Xe — Tự Lái</h2>
-          <p className="text-sm text-gray-500">
-            Đơn #{booking.id}
-            {booking.bookingCode && ` — ${booking.bookingCode}`}
-          </p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        {/* Sidebar */}
-        <div className="md:col-span-1 space-y-4">
-          {/* Booking card */}
-          <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-            <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2 text-sm">
-              <FileText size={16} className="text-blue-600" /> Thông tin đơn
-            </h3>
-            <div className="space-y-2 text-xs text-gray-600">
-              {booking.customerName && (
-                <p className="flex items-center gap-2"><User size={14} /> {booking.customerName}</p>
-              )}
-              {booking.customerPhone && (
-                <p className="flex items-center gap-2"><Phone size={14} /> {booking.customerPhone}</p>
-              )}
-              {selfDriveUnits.map((u) => (
-                <div key={u.id}>
-                  <p className="flex items-center gap-2">
-                    <Car size={14} />
-                    {u.vehicleBrand ? `${u.vehicleBrand} ${u.vehicleModel}` : `Xe #${u.vehicleId}`}
-                  </p>
-                  {u.vehiclePlateNumber && (
-                    <p className="text-blue-600 font-semibold bg-blue-50 border border-blue-100 w-fit px-2 py-0.5 rounded mt-1">
-                      {u.vehiclePlateNumber}
-                    </p>
-                  )}
-                </div>
-              ))}
-              <p className="flex items-center gap-2">
-                <Clock size={14} />
-                {booking.deliveryMode === 'DELIVERY' ? '🚚 Giao tận nơi' : '🏢 Tại bãi'}
-              </p>
-            </div>
-          </div>
-
-          {/* Stepper */}
-          <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-            <h3 className="font-bold text-gray-800 mb-3 text-sm">Quy trình</h3>
-            <div className="space-y-1">
-              {STEPS.map((s, i) => (
-                <div
-                  key={s.key}
-                  className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg transition
-                    ${i === step ? 'bg-blue-50 text-blue-700 font-semibold'
-                    : i < step ? 'text-green-600'
-                    : 'text-gray-400'}`}
-                >
-                  <span
-                    className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold border shrink-0
-                      ${i === step ? 'border-blue-500 bg-blue-500 text-white'
-                      : i < step ? 'border-green-500 bg-green-500 text-white'
-                      : 'border-gray-300'}`}
-                  >
-                    {i < step ? '✓' : i + 1}
-                  </span>
-                  {s.label}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Main content */}
-        <div className="md:col-span-3">
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 min-h-[420px] flex flex-col">
-            <div className="flex-1">
-              {stepRenderers[step]()}
-            </div>
-
-            {/* Navigation */}
-            <div className="flex justify-between mt-8 pt-4 border-t">
-              <button
-                onClick={() => setStep((s) => s - 1)}
-                disabled={step === 0}
-                className={`flex items-center gap-1 px-5 py-2.5 rounded-xl font-medium transition
-                  ${step === 0 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-600 hover:bg-gray-100'}`}
-              >
-                <ChevronLeft size={18} /> Quay lại
-              </button>
-
-              {step < STEPS.length - 1 ? (
-                <button
-                  onClick={() => setStep((s) => s + 1)}
-                  disabled={!canGoNext()}
-                  className={`flex items-center gap-1 px-5 py-2.5 rounded-xl font-medium transition
-                    ${canGoNext()
-                      ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm'
-                      : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
-                >
-                  Tiếp theo <ChevronRight size={18} />
-                </button>
-              ) : (
-                <button
-                  onClick={handleFinalConfirm}
-                  disabled={!canGoNext() || submitting}
-                  className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold transition shadow-lg
-                    ${canGoNext() && !submitting
-                      ? 'bg-green-600 text-white hover:bg-green-700 shadow-green-200'
-                      : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
-                >
-                  {submitting
-                    ? <><Loader2 size={16} className="animate-spin" /> Đang xử lý...</>
-                    : <><CheckCircle size={18} /> Xác nhận Giao Xe</>
-                  }
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
       </div>
 
     </div>
   );
 };
 
-export default HandoverCar;
+export default ReceiveCar;
