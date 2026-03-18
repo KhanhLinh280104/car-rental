@@ -1,25 +1,18 @@
 import axiosClient from "./axiosClient";
 
 /**
- * Booking Service API
- * Base path: /bookings, /drivers
- * Communicates with booking-service via API Gateway
+ * Booking API
+ * Base path: /api/v1/bookings
  */
 
-// ============================================================
-// BOOKING — QUERY
-// ============================================================
-
-/**
- * Lấy tất cả bookings (phân trang, filter theo status)
- * @param {string|null} status - PENDING | CONFIRMED | IN_PROGRESS | COMPLETED | CANCELLED | null
- * @param {number} page
- * @param {number} size
- */
-export const getAllBookingsApi = (status = null, page = 0, size = 20) => {
-    const params = { page, size };
-    if (status) params.status = status;
-    return axiosClient.get("/bookings", { params });
+export const getAllBookingsApi = (params = {}) => {
+  return axiosClient.get("/bookings", {
+    params: {
+      page:   params.page   ?? 0,
+      size:   params.size   ?? 10,
+      status: params.status ?? undefined,
+    },
+  });
 };
 
 /**
@@ -92,17 +85,37 @@ export const confirmBookingApi = (id) =>
     axiosClient.patch(`/bookings/${id}/confirm`);
 
 /**
- * [STAFF] Bàn giao xe cho khách (không có tài xế) → IN_PROGRESS
+ * [STAFF] Scan ảnh xe & phân tích AI trước bàn giao (PICKUP preview)
  * @param {number} id
- * @param {Object} handoverData — { rentalUnitId, type:"PICKUP", odoMeter, condition, photos }
+ * @param {Object} scanData — { rentalUnitId, vehiclePhotos: [{corner, imageUrl}, ...] }
+ * @returns AI analysis: inspectionAnalysisId, analysisStatus, inspectionAnalysis, comparison (null for PICKUP)
+ */
+export const staffHandoverStartPreviewApi = (id, scanData) =>
+    axiosClient.post(`/bookings/${id}/staff-handover-start-preview`, scanData);
+
+/**
+ * [STAFF] Bàn giao xe cho khách (không có tài xế) → IN_PROGRESS
+ * ⚠️ Không gửi ảnh — chỉ ghi biên bản (type, odoMeter, condition, inspectionAnalysisId)
+ * @param {number} id
+ * @param {Object} handoverData — { rentalUnitId, type:"PICKUP", odoMeter, condition, inspectionAnalysisId }
  */
 export const staffHandoverStartApi = (id, handoverData) =>
     axiosClient.patch(`/bookings/${id}/staff-handover-start`, handoverData);
 
 /**
- * [STAFF] Nhận xe lại từ khách (không có tài xế) → COMPLETED
+ * [STAFF] Scan ảnh xe & phân tích AI trước nhận xe (RETURN preview)
  * @param {number} id
- * @param {Object} handoverData — { rentalUnitId, type:"RETURN", odoMeter, condition, photos }
+ * @param {Object} scanData — { rentalUnitId, vehiclePhotos: [{corner, imageUrl}, ...] }
+ * @returns AI analysis: inspectionAnalysisId, analysisStatus, inspectionAnalysis, comparison (with damageChanges)
+ */
+export const staffHandoverReturnPreviewApi = (id, scanData) =>
+    axiosClient.post(`/bookings/${id}/staff-handover-return-preview`, scanData);
+
+/**
+ * [STAFF] Nhận xe lại từ khách (không có tài xế) → COMPLETED
+ * ⚠️ Không gửi ảnh — chỉ ghi biên bản (type, odoMeter, condition, inspectionAnalysisId, finalIncurredFee)
+ * @param {number} id
+ * @param {Object} handoverData — { rentalUnitId, type:"RETURN", odoMeter, condition, inspectionAnalysisId, finalIncurredFee }
  */
 export const staffHandoverReturnApi = (id, handoverData) =>
     axiosClient.patch(`/bookings/${id}/staff-handover-return`, handoverData);
@@ -136,63 +149,36 @@ export const driverCompleteTripApi = (id, handoverData) =>
 // ============================================================
 // DRIVER PROFILE
 // ============================================================
+export const getBookingByIdApi = (id) => {
+  return axiosClient.get(`/bookings/${id}`);
+};
 
-/**
- * Lấy danh sách tất cả tài xế (merge IAM + local profile)
- */
-export const getAllDriversApi = () => axiosClient.get("/drivers");
+export const getBookingByCodeApi = (bookingCode) => {
+  return axiosClient.get(`/bookings/code/${bookingCode}`);
+};
 
-/**
- * Lấy thông tin tài xế theo profile ID (local)
- * @param {number} id
- */
-export const getDriverByIdApi = (id) => axiosClient.get(`/drivers/${id}`);
+export const getBookingsByUserIdApi = (userId) => {
+  return axiosClient.get(`/bookings/user/${userId}`);
+};
 
-/**
- * Lấy thông tin tài xế theo userId (IAM UUID)
- * @param {string} userId
- */
-export const getDriverByUserIdApi = (userId) =>
-    axiosClient.get(`/drivers/by-user/${userId}`);
+export const getAvailableDriversApi = () => {
+  return axiosClient.get("/bookings/available-drivers");
+};
 
-/**
- * Cập nhật trạng thái tài xế
- * @param {number} id - profile ID
- * @param {"ACTIVE"|"INACTIVE"|"BLOCKED"} status
- */
-export const updateDriverStatusApi = (id, status) =>
-    axiosClient.patch(`/drivers/${id}/status`, null, { params: { status } });
+export const confirmBookingApi = (id) => {
+  return axiosClient.patch(`/bookings/${id}/confirm`);
+};
 
-/**
- * Đăng ký hồ sơ tài xế cho user IAM đã có role DRIVER
- * @param {string} userId - UUID từ IAM
- * @param {string} licenseNumber 
- * @param {string} currentLocation 
- */
-export const createDriverProfileApi = (userId, licenseNumber, currentLocation) =>
-    axiosClient.post("/drivers", null, { params: { userId, licenseNumber, currentLocation } });
+export const cancelBookingApi = (id) => {
+  return axiosClient.patch(`/bookings/${id}/cancel`);
+};
 
-/**
- * Cập nhật hồ sơ nghề nghiệp tài xế (bằng lái, vị trí)
- * @param {number} id - profile ID
- * @param {string} licenseNumber 
- * @param {string} currentLocation 
- */
-export const updateDriverProfileApi = (id, licenseNumber, currentLocation) =>
-    axiosClient.put(`/drivers/${id}`, null, { params: { licenseNumber, currentLocation } });
+export const assignDriverApi = (id, driverId) => {
+  return axiosClient.patch(`/bookings/${id}/assign-driver`, { driverId });
+};
 
-/**
- * Lấy danh sách booking của tài xế theo profile ID (local)
- * Thay thế cho pattern getAllBookingsApi + filter client-side
- * @param {number} driverId - DriverProfile.id (local ID, không phải userId IAM)
- * @param {string|null} status - PENDING | CONFIRMED | IN_PROGRESS | COMPLETED | CANCELLED | null (tất cả)
- * @param {number} page
- * @param {number} size
- */
-export const getDriverBookingsApi = (driverId, status = null, page = 0, size = 20) => {
-    const params = { page, size };
-    if (status) params.status = status;
-    return axiosClient.get(`/drivers/${driverId}/bookings`, { params });
+export const staffHandoverStartApi = (id) => {
+  return axiosClient.patch(`/bookings/${id}/staff-handover-start`);
 };
 
 // ============================================================

@@ -6,7 +6,9 @@ import {
 } from 'lucide-react';
 import { useNotification } from '../../context/NotificationContext';
 import { useNavigate, useParams } from 'react-router-dom';
-import { getBookingByIdApi, staffHandoverReturnApi } from '../../api/bookingApi';
+import { getBookingByIdApi, staffHandoverReturnPreviewApi, staffHandoverReturnApi } from '../../api/bookingApi';
+import InspectionResultsDisplay from './InspectionResultsDisplay';
+import { uploadImageToCloudinary } from '../../lib/cloudinary';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const fmtDate = (s) =>
@@ -16,8 +18,7 @@ const fmtMoney = (n) =>
 
 const STEPS = [
   { key: 'mileage', label: 'Số KM đồng hồ' },
-  { key: 'condition', label: 'Tình trạng xe' },
-  { key: 'photos', label: 'Chụp ảnh xe' },
+  { key: 'inspection', label: 'Kiểm tra tình trạng xe' },
   { key: 'confirm', label: 'Xác nhận nhận xe' },
 ];
 
@@ -43,13 +44,24 @@ const ReceiveCar = () => {
     damageNotes: '',
   });
 
-  // Step 3 — Ảnh xe
-  const [photos, setPhotos] = useState({ front: null, back: null, left: null, right: null });
+  // Step 2 — Ảnh xe (gộp chung với kiểm tra tình trạng)
+  const [photos, setPhotos] = useState({ FRONT_LEFT: null, FRONT_RIGHT: null, REAR_LEFT: null, REAR_RIGHT: null });
   const fileInputRef = useRef(null);
   const [activePhotoSlot, setActivePhotoSlot] = useState(null);
 
-  // Step 4 — Xác nhận
+  // Scan (AI Analysis) state — new workflow
+  const [scannedAnalysisId, setScannedAnalysisId] = useState(null);
+  const [scannedAnalysis, setScannedAnalysis] = useState(null);
+  const [scanError, setScanError] = useState(null);
+  const [editedFeeFromAI, setEditedFeeFromAI] = useState(0);
+  const [scanInProgress, setScanInProgress] = useState(false);
+  const [scanSkipped, setScanSkipped] = useState(false);
+
+  // Step 3 — Xác nhận
   const [staffConfirmed, setStaffConfirmed] = useState(false);
+
+  // Inspection results from BE (confirm endpoint)
+  const [inspectionResults, setInspectionResults] = useState({});
 
   // ── Fetch real booking ────────────────────────────────────────────────────
   useEffect(() => {
@@ -87,19 +99,36 @@ const ReceiveCar = () => {
 
   const selfDriveUnits = (booking.rentalUnits || []).filter((u) => !u.isWithDriver);
   const firstUnit = selfDriveUnits[0];
+  const hasAllPhotos = photos.FRONT_LEFT && photos.FRONT_RIGHT && photos.REAR_LEFT && photos.REAR_RIGHT;
+  const canReviewCondition = scannedAnalysisId !== null || scanSkipped;
 
   const canGoNext = () => {
     if (step === 0) return returnMileage && Number(returnMileage) > 0;
-    if (step === 1) return condition.exteriorOk && condition.interiorOk;
-    if (step === 2) return photos.front && photos.back && photos.left && photos.right;
-    if (step === 3) return staffConfirmed;
+    if (step === 1) return canReviewCondition && condition.exteriorOk && condition.interiorOk;
+    if (step === 2) return staffConfirmed;
     return false;
+  };
+
+  // Validate photos: exactly 4, all corners present
+  const validatePhotos = () => {
+    const corners = ['FRONT_LEFT', 'FRONT_RIGHT', 'REAR_LEFT', 'REAR_RIGHT'];
+    const present = corners.filter(c => photos[c]);
+    if (present.length !== 4) {
+      notifyError('❌ Phải có đủ 4 ảnh từ 4 góc khác nhau');
+      return false;
+    }
+    return true;
   };
 
   const handlePhotoUpload = (e) => {
     const file = e.target.files[0];
     if (file && activePhotoSlot) {
       setPhotos((prev) => ({ ...prev, [activePhotoSlot]: file }));
+      // Photo changed => previous analysis is stale and must be rerun.
+      setScannedAnalysisId(null);
+      setScannedAnalysis(null);
+      setScanError(null);
+      setScanSkipped(false);
     }
     setActivePhotoSlot(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -110,7 +139,100 @@ const ReceiveCar = () => {
     fileInputRef.current?.click();
   };
 
-  const removePhoto = (slot) => setPhotos((prev) => ({ ...prev, [slot]: null }));
+  const removePhoto = (slot) => {
+    setPhotos((prev) => ({ ...prev, [slot]: null }));
+    setScannedAnalysisId(null);
+    setScannedAnalysis(null);
+    setScanError(null);
+    setScanSkipped(false);
+  };
+
+  // ── Upload ảnh lên Cloudinary và build vehiclePhotos payload ───────────
+  const uploadVehiclePhotos = async (bookingIdForPath, rentalUnitIdForPath) => {
+    const corners = ['FRONT_LEFT', 'FRONT_RIGHT', 'REAR_LEFT', 'REAR_RIGHT'];
+    const uploaded = await Promise.all(
+      corners.map(async (corner) => {
+        const file = photos[corner];
+        if (!file) {
+          throw new Error(`Thiếu ảnh góc ${corner}`);
+        }
+
+        const imageUrl = await uploadImageToCloudinary(
+          file,
+          `bookings/${bookingIdForPath}/units/${rentalUnitIdForPath}/RETURN`
+        );
+
+        if (!imageUrl || !(imageUrl.startsWith('http://') || imageUrl.startsWith('https://'))) {
+          throw new Error(`URL ảnh không hợp lệ cho góc ${corner}`);
+        }
+
+        return { corner, imageUrl };
+      })
+    );
+
+    return uploaded;
+  };
+
+  // ── Scan AI Analysis (preview endpoint) ────────────────────────────────
+  const handleScanAnalyze = async () => {
+    if (!validatePhotos()) {
+      return;
+    }
+
+    setScanSkipped(false);
+    setScanInProgress(true);
+    setScanError(null);
+
+    try {
+      const unit = firstUnit;
+      if (!unit) {
+        throw new Error('Xe không tìm thấy');
+      }
+
+      // Upload photos to Cloudinary
+      const vehiclePhotos = await uploadVehiclePhotos(booking.id, unit.id);
+
+      // Call scan preview endpoint
+      const response = await staffHandoverReturnPreviewApi(booking.id, {
+        rentalUnitId: unit.id,
+        vehiclePhotos,
+      });
+
+      const data = response.data?.data;
+      if (!data) {
+        throw new Error('Không nhận được dữ liệu từ AI');
+      }
+
+      // Fetch full detail record for review UI.
+      const analysisId = data.inspectionAnalysisId;
+      let resolvedAnalysis = data;
+      if (analysisId) {
+        try {
+          const detailResponse = await getVehicleInspectionByAnalysisIdApi(analysisId);
+          resolvedAnalysis = detailResponse.data?.data || data;
+        } catch {
+          resolvedAnalysis = data;
+        }
+      }
+
+      // Save scan results
+      setScannedAnalysisId(analysisId || null);
+      setScannedAnalysis(resolvedAnalysis);
+      setEditedFeeFromAI(resolvedAnalysis.inspectionAnalysis?.recommendedFee || data.inspectionAnalysis?.recommendedFee || 0);
+
+      notifySuccess('✅ Phân tích & so sánh hoàn tất.');
+    } catch (e) {
+      const msg = e.response?.data?.message || e.message || 'Phân tích AI thất bại. Vui lòng thử lại.';
+      setScanError(msg);
+      notifyError(msg);
+    } finally {
+      setScanInProgress(false);
+    }
+  };
+
+  const loadInspectionDetail = async (analysisId) => {};
+
+  const openInspectionHistory = async () => {};
 
   // ── Gọi staffHandoverReturnApi cho từng xe tự lái ─────────────────────────
   const handleFinalConfirm = async () => {
@@ -125,18 +247,36 @@ const ReceiveCar = () => {
 
     try {
       for (const unit of selfDriveUnits) {
-        await staffHandoverReturnApi(booking.id, {
+        let latestReturnAnalysisId = scannedAnalysisId || null;
+
+        const normalizedFinalFee = Number(editedFeeFromAI) >= 0 ? Number(editedFeeFromAI) : 0;
+        const response = await staffHandoverReturnApi(booking.id, {
           rentalUnitId: unit.id,
           type: 'RETURN',
           odoMeter: Number(returnMileage),
           condition: conditionNote || '',
-          photos: null,
+          inspectionAnalysisId: latestReturnAnalysisId,
+          finalIncurredFee: normalizedFinalFee,
         });
+        // Store inspection results from response
+        if (response.data?.data?.rentalUnits?.[0]) {
+          const unitData = response.data.data.rentalUnits[0];
+          setInspectionResults({
+            inspectionAnalysisId: unitData.inspectionAnalysisId,
+            inspectionStage: unitData.inspectionStage,
+            inspectionStatus: unitData.inspectionStatus,
+            inspectionSeverity: unitData.inspectionSeverity,
+            comparisonSummary: unitData.comparisonSummary,
+            inspectionRecommendedFee: unitData.inspectionRecommendedFee,
+            newDamageDetected: unitData.newDamageDetected,
+            needsManualReview: unitData.needsManualReview,
+          });
+        }
       }
       notifySuccess('✅ Đã nhận xe thành công! Booking hoàn tất.');
       navigate('/staff/booking');
     } catch (e) {
-      const msg = e.response?.data?.message || 'Nhận xe thất bại. Vui lòng thử lại.';
+      const msg = e.response?.data?.message || e.message || 'Nhận xe thất bại. Vui lòng thử lại.';
       setApiError(msg);
       notifyError(msg);
     } finally {
@@ -195,71 +335,21 @@ const ReceiveCar = () => {
     </div>
   );
 
-  const renderStepCondition = () => (
-    <div className="space-y-5">
-      <h3 className="font-bold text-lg text-gray-800">Kiểm tra tình trạng xe</h3>
-      <p className="text-sm text-gray-500">Xác nhận tình trạng ngoại thất, nội thất và ghi nhận hư hại nếu có.</p>
-
-      <div className="space-y-3">
-        <label className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-gray-50 transition">
-          <input type="checkbox" checked={condition.exteriorOk}
-            onChange={(e) => setCondition({ ...condition, exteriorOk: e.target.checked })}
-            className="w-5 h-5 text-purple-600 rounded" />
-          <div>
-            <p className="font-medium text-gray-800">Ngoại thất đã kiểm tra</p>
-            <p className="text-xs text-gray-500">Kiểm tra xước, móp, vỡ, sơn bong tróc</p>
-          </div>
-        </label>
-
-        <label className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-gray-50 transition">
-          <input type="checkbox" checked={condition.interiorOk}
-            onChange={(e) => setCondition({ ...condition, interiorOk: e.target.checked })}
-            className="w-5 h-5 text-purple-600 rounded" />
-          <div>
-            <p className="font-medium text-gray-800">Nội thất đã kiểm tra</p>
-            <p className="text-xs text-gray-500">Ghế, điều hoà, màn hình, âm thanh</p>
-          </div>
-        </label>
-
-        <label className="flex items-center gap-3 p-3 rounded-lg border border-red-200 cursor-pointer hover:bg-red-50 transition">
-          <input type="checkbox" checked={condition.hasDamage}
-            onChange={(e) => setCondition({ ...condition, hasDamage: e.target.checked })}
-            className="w-5 h-5 text-red-600 rounded" />
-          <div>
-            <p className="font-medium text-red-700 flex items-center gap-1">
-              <AlertTriangle size={14} /> Có hư hại / sự cố
-            </p>
-            <p className="text-xs text-gray-500">Đánh dấu nếu phát hiện hư hại mới</p>
-          </div>
-        </label>
-      </div>
-
-      {condition.hasDamage && (
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-1">Mô tả chi tiết hư hại</label>
-          <textarea
-            rows="4"
-            value={condition.damageNotes}
-            onChange={(e) => setCondition({ ...condition, damageNotes: e.target.value })}
-            placeholder="VD: Xước cản trước bên phải dài 15cm, móp nhẹ cửa sau bên trái..."
-            className="w-full px-4 py-2 border border-red-300 rounded-lg focus:ring-2 focus:ring-red-400 outline-none bg-red-50"
-          />
-        </div>
-      )}
-    </div>
-  );
-
-  const renderStepPhotos = () => {
+  const renderStepCondition = () => {
     const slots = [
-      { key: 'front', label: 'Mặt trước' },
-      { key: 'back', label: 'Mặt sau' },
-      { key: 'left', label: 'Bên trái' },
-      { key: 'right', label: 'Bên phải' },
+      { key: 'FRONT_LEFT', label: 'FRONT_LEFT · Góc trước trái' },
+      { key: 'FRONT_RIGHT', label: 'FRONT_RIGHT · Góc trước phải' },
+      { key: 'REAR_LEFT', label: 'REAR_LEFT · Góc sau trái' },
+      { key: 'REAR_RIGHT', label: 'REAR_RIGHT · Góc sau phải' },
     ];
     return (
       <div className="space-y-5">
-        <h3 className="font-bold text-lg text-gray-800">Chụp ảnh xe lúc trả (4 góc)</h3>
-        <p className="text-sm text-gray-500">Chụp rõ 4 góc xe để làm bằng chứng tình trạng xe khi trả.</p>
+        <h3 className="font-bold text-lg text-gray-800">Kiểm tra tình trạng xe</h3>
+        <p className="text-sm text-gray-500">Phân tích AI từ 4 góc ảnh trước, sau đó xác nhận checklist tình trạng xe.</p>
+
+        <div className="rounded-lg border border-purple-100 bg-purple-50 px-3 py-2 text-xs text-purple-800">
+          Quy ước trái/phải theo chiều xe chạy (ngồi trong xe nhìn về phía trước).
+        </div>
 
         <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
 
@@ -289,11 +379,184 @@ const ReceiveCar = () => {
             </div>
           ))}
         </div>
+
+        {/* Analyze & Compare AI Button */}
+        <div className="flex gap-3">
+          <button
+            onClick={handleScanAnalyze}
+            disabled={!hasAllPhotos || scanInProgress}
+            className={`flex-1 px-4 py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 ${
+              !hasAllPhotos || scanInProgress
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-purple-600 text-white hover:bg-purple-700'
+            }`}
+          >
+            {scanInProgress ? (
+              <>
+                <Loader2 size={18} className="animate-spin" />
+                Đang phân tích...
+              </>
+            ) : (
+              <>📊 Phân tích & So sánh</>
+            )}
+          </button>
+          <button
+            onClick={() => {
+              setScanSkipped(true);
+              setScanError(null);
+            }}
+            disabled={scanInProgress}
+            className={`px-4 py-3 rounded-lg font-semibold transition ${
+              scanInProgress
+                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                : 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+            }`}
+          >
+            ⏭ Bỏ qua AI
+          </button>
+          {scanError && (
+            <button
+              onClick={handleScanAnalyze}
+              disabled={scanInProgress}
+              className="px-4 py-3 rounded-lg font-semibold bg-orange-600 text-white hover:bg-orange-700 transition"
+            >
+              🔄 Thử lại
+            </button>
+          )}
+        </div>
+
+        {/* Scan Error Display */}
+        {scanError && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start gap-2">
+            <AlertTriangle size={16} className="text-red-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-sm text-red-700">Phân tích AI thất bại</p>
+              <p className="text-sm text-red-600 mt-1">{scanError}</p>
+              <button
+                onClick={() => setScanSkipped(true)}
+                className="text-xs text-red-700 underline hover:no-underline mt-2 font-semibold"
+              >
+                Bỏ qua AI, xác nhận ngay →
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Scan Results Display (if success) */}
+        {scannedAnalysis && scannedAnalysis.analysisStatus === 'SUCCESS' && (
+          <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 space-y-3">
+            <p className="font-semibold text-purple-700">📊 Kết quả phân tích & so sánh AI:</p>
+            <InspectionResultsDisplay
+              inspectionStatus={scannedAnalysis.analysisStatus}
+              inspectionSeverity={scannedAnalysis.inspectionAnalysis?.severity}
+              comparisonSummary={scannedAnalysis.comparison?.summary}
+              inspectionRecommendedFee={editedFeeFromAI}
+              newDamageDetected={scannedAnalysis.comparison?.newDamageDetected}
+              needsManualReview={scannedAnalysis.inspectionAnalysis?.needsManualReview}
+              inspectionStage="RETURN"
+              editableFee={true}
+              onFeeChange={setEditedFeeFromAI}
+              comparisonDamages={scannedAnalysis.comparison?.damageChanges || []}
+              showComparison={true}
+            />
+          </div>
+        )}
+
+        {/* Missing Baseline Warning */}
+        {scannedAnalysis && scannedAnalysis.comparison?.baselineFound === false && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
+            <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-sm text-amber-700">⚠️ Thiếu baseline PICKUP</p>
+              <p className="text-xs text-amber-600">Xe chưa được quét khi giao, không thể so sánh. Cần staff review thủ công.</p>
+            </div>
+          </div>
+        )}
+
+        {/* Skip AI Warning */}
+        {scanSkipped && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
+            <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-sm text-amber-700">⚠️ Bỏ qua phân tích AI</p>
+              <p className="text-xs text-amber-600">Xe chưa được phân tích AI, staff sẽ đánh giá hư hại thủ công</p>
+            </div>
+          </div>
+        )}
+
+        {!canReviewCondition && (
+          <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 text-sm text-indigo-700">
+            Vui lòng bấm <strong>Phân tích & So sánh</strong> trước khi tích checklist tình trạng xe.
+          </div>
+        )}
+
+        <div className="space-y-3">
+          <label className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-gray-50 transition">
+            <input
+              type="checkbox"
+              checked={condition.exteriorOk}
+              onChange={(e) => setCondition({ ...condition, exteriorOk: e.target.checked })}
+              className="w-5 h-5 text-purple-600 rounded"
+              disabled={!canReviewCondition}
+            />
+            <div>
+              <p className="font-medium text-gray-800">Ngoại thất đã kiểm tra</p>
+              <p className="text-xs text-gray-500">Kiểm tra xước, móp, vỡ, sơn bong tróc</p>
+            </div>
+          </label>
+
+          <label className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-gray-50 transition">
+            <input
+              type="checkbox"
+              checked={condition.interiorOk}
+              onChange={(e) => setCondition({ ...condition, interiorOk: e.target.checked })}
+              className="w-5 h-5 text-purple-600 rounded"
+              disabled={!canReviewCondition}
+            />
+            <div>
+              <p className="font-medium text-gray-800">Nội thất đã kiểm tra</p>
+              <p className="text-xs text-gray-500">Ghế, điều hoà, màn hình, âm thanh</p>
+            </div>
+          </label>
+
+          <label className="flex items-center gap-3 p-3 rounded-lg border border-red-200 cursor-pointer hover:bg-red-50 transition">
+            <input
+              type="checkbox"
+              checked={condition.hasDamage}
+              onChange={(e) => setCondition({ ...condition, hasDamage: e.target.checked })}
+              className="w-5 h-5 text-red-600 rounded"
+              disabled={!canReviewCondition}
+            />
+            <div>
+              <p className="font-medium text-red-700 flex items-center gap-1">
+                <AlertTriangle size={14} /> Có hư hại / sự cố
+              </p>
+              <p className="text-xs text-gray-500">Đánh dấu nếu phát hiện hư hại mới</p>
+            </div>
+          </label>
+        </div>
+
+        {condition.hasDamage && (
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Mô tả chi tiết hư hại</label>
+            <textarea
+              rows="4"
+              value={condition.damageNotes}
+              onChange={(e) => setCondition({ ...condition, damageNotes: e.target.value })}
+              placeholder="VD: Xước cản trước bên phải dài 15cm, móp nhẹ cửa sau bên trái..."
+              className="w-full px-4 py-2 border border-red-300 rounded-lg focus:ring-2 focus:ring-red-400 outline-none bg-red-50"
+              disabled={!canReviewCondition}
+            />
+          </div>
+        )}
       </div>
     );
   };
 
   const renderStepConfirm = () => {
+    const finalIncurredFee = Number(editedFeeFromAI) >= 0 ? Number(editedFeeFromAI) : 0;
+    const estimatedTotalAfterFee = Number(booking.totalAmount || 0) + finalIncurredFee;
+
     return (
       <div className="space-y-5">
         <h3 className="font-bold text-lg text-gray-800">Xác nhận nhận xe</h3>
@@ -332,6 +595,14 @@ const ReceiveCar = () => {
               <p className="text-gray-500">Tổng tiền</p>
               <p className="font-semibold text-green-600">{fmtMoney(booking.totalAmount)}</p>
             </div>
+            <div>
+              <p className="text-gray-500">Phụ phí phát sinh</p>
+              <p className="font-semibold text-orange-600">{fmtMoney(finalIncurredFee)}</p>
+            </div>
+            <div>
+              <p className="text-gray-500">Tổng tạm tính sau phụ phí</p>
+              <p className="font-semibold text-purple-700">{fmtMoney(estimatedTotalAfterFee)}</p>
+            </div>
           </div>
 
           {condition.hasDamage && condition.damageNotes && (
@@ -351,6 +622,24 @@ const ReceiveCar = () => {
           </div>
         </div>
 
+        {/* AI Inspection Results (if available) */}
+        {Object.keys(inspectionResults).length > 0 && (
+          <div className="bg-purple-50 border border-purple-100 rounded-lg p-4">
+            <h4 className="font-semibold text-purple-700 mb-3">📊 Kết quả phân tích AI tình trạng xe</h4>
+            <InspectionResultsDisplay
+              inspectionStatus={inspectionResults.inspectionStatus}
+              inspectionSeverity={inspectionResults.inspectionSeverity}
+              comparisonSummary={inspectionResults.comparisonSummary}
+              inspectionRecommendedFee={editedFeeFromAI}
+              newDamageDetected={inspectionResults.newDamageDetected}
+              needsManualReview={inspectionResults.needsManualReview}
+              inspectionStage={inspectionResults.inspectionStage}
+              onFeeChange={setEditedFeeFromAI}
+              editableFee={true}
+            />
+          </div>
+        )}
+
         <label className="flex items-center gap-3 p-4 rounded-xl border-2 border-purple-200 bg-purple-50 cursor-pointer">
           <input type="checkbox" checked={staffConfirmed} onChange={(e) => setStaffConfirmed(e.target.checked)}
             className="w-5 h-5 text-purple-600 rounded" />
@@ -365,7 +654,7 @@ const ReceiveCar = () => {
     );
   };
 
-  const stepRenderers = [renderStepMileage, renderStepCondition, renderStepPhotos, renderStepConfirm];
+  const stepRenderers = [renderStepMileage, renderStepCondition, renderStepConfirm];
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-10">
@@ -481,6 +770,7 @@ const ReceiveCar = () => {
           </div>
         </div>
       </div>
+
     </div>
   );
 };
